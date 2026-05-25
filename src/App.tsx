@@ -15,6 +15,7 @@ import ClassBpDre from './pages/crud/ClassBpDre'
 import ClassNotaExplicativa from './pages/crud/ClassNotaExplicativa'
 import ClassPapelTrabalho from './pages/crud/ClassPapelTrabalho'
 import Balancetes from './pages/Balancetes'
+import Dashboard from './pages/Dashboard'
 
 const queryClient = new QueryClient()
 
@@ -28,7 +29,8 @@ function App(): JSX.Element {
               <Route path="/login" element={<Login />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<Layout />}>
-                  <Route index element={<Navigate to="/planos" replace />} />
+                  <Route index element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/planos" element={<PlanoContas />} />
                   <Route path="/planos/:id/itens" element={<ItensPlano />} />
                   <Route path="/balancetes" element={<Balancetes />} />

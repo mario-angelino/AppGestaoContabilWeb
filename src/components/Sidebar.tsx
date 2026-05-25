@@ -9,7 +9,8 @@ import {
   Briefcase,
   LogOut,
   FolderTree,
-  Scale
+  Scale,
+  LayoutDashboard
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useActivePlan } from '../contexts/ActivePlanContext'
@@ -64,6 +65,7 @@ export default function Sidebar(): JSX.Element {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-2">
         <SectionLabel label="Principal" />
+        <NavItem to="/dashboard" icon={<LayoutDashboard size={16} />} label="Dashboard" end />
         <NavItem
           to="/planos"
           icon={<BookOpen size={16} />}

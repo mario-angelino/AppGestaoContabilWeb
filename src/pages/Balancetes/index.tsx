@@ -217,16 +217,16 @@ function parseXLSAccion(buf: ArrayBuffer): { mes: number | null; ano: number | n
     const conta = String(row[0] ?? '').trim()
     const reduzido = Number(row[3])
     if (!conta || isNaN(reduzido) || reduzido === 0) continue
-    const naturezaAnt  = String(row[12] ?? '').trim()
+    const naturezaAnt = String(row[12] ?? '').trim()
     const naturezaAtual = String(row[24] ?? '').trim()
-    const saldoAnt   = Number(row[10]) || 0
+    const saldoAnt = Number(row[10]) || 0
     const saldoAtual = Number(row[22]) || 0
     rows.push({
       conta,
       reduzido,
       descricao: String(row[4] ?? '').trim(),
-      saldo_anterior: naturezaAnt   ? aplicarSinal(saldoAnt,   conta, naturezaAnt)   : saldoAnt,
-      val_debito:  Number(row[13]) || 0,
+      saldo_anterior: naturezaAnt ? aplicarSinal(saldoAnt, conta, naturezaAnt) : saldoAnt,
+      val_debito: Number(row[13]) || 0,
       val_credito: Number(row[19]) || 0,
       saldo_atual: naturezaAtual ? aplicarSinal(saldoAtual, conta, naturezaAtual) : saldoAtual,
     })
@@ -430,10 +430,10 @@ function ImportModal({
     }
   }
 
-  const handleSelectExcel         = () => handleSelectWith(pickExcelFile, parseXLS)
-  const handleSelectExcelAccion   = () => handleSelectWith(pickExcelFile, parseXLSAccion)
-  const handleSelectCSV           = () => handleSelectWith(pickCSVFile, parseCSV)
-  const handleSelectCSVAjax       = () => handleSelectWith(pickCSVFile, parseCSVAjax)
+  const handleSelectExcel = () => handleSelectWith(pickExcelFile, parseXLS)
+  const handleSelectExcelAccion = () => handleSelectWith(pickExcelFile, parseXLSAccion)
+  const handleSelectCSV = () => handleSelectWith(pickCSVFile, parseCSV)
+  const handleSelectCSVAjax = () => handleSelectWith(pickCSVFile, parseCSVAjax)
 
   const handleImport = async () => {
     if (!detectedMes || !detectedAno) return
@@ -541,7 +541,7 @@ function ImportModal({
                 {/* CSV */}
                 <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">CSV</p>
+                    <p className="text-sm font-semibold text-gray-800">CSV - SIENGE</p>
                     <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
                       Arquivo texto separado por <strong>ponto-e-vírgula</strong>, codificação windows-1252.<br />
                       Sinal corrigido pela coluna de natureza (D/C): conta <strong>1</strong> → D=positivo; demais → C=positivo.
@@ -966,11 +966,11 @@ function ValidacaoModal({
       // RESULTADO e PL são exclusivos (um bp_dre só pode estar em um deles).
       // AC/ANC/PC/PNC podem compartilhar o mesmo bp_dre entre si.
       const dreSet = new Set<number>() // bp_dre do subgrupo RESULTADO
-      const plSet  = new Set<number>() // bp_dre do subgrupo PL
+      const plSet = new Set<number>() // bp_dre do subgrupo PL
 
       type Entry = { bpId: number; desc: string; indice: number | null }
       const dreEntriesMap = new Map<number, Entry>()
-      const plEntriesMap  = new Map<number, Entry>()
+      const plEntriesMap = new Map<number, Entry>()
       let plSubgrupo: SubgrupoVal | null = null
       const indiceMapBP = new Map<string, number | null>() // "sgId|bpId" para AC/ANC/PC/PNC
 
@@ -1003,8 +1003,8 @@ function ValidacaoModal({
       // DRE (dreSet) e PL (plSet): acumulam por bpId (sem risco de duplicação)
       // AC/ANC/PC/PNC: acumulam por "sgId|bpId" (evita duplicação entre subgrupos)
       const saldoDRE = new Map<number, number>()
-      const saldoPL  = new Map<number, number>()
-      const saldoBP  = new Map<string, number>()
+      const saldoPL = new Map<number, number>()
+      const saldoBP = new Map<string, number>()
 
       for (const item of bItems) {
         const cls = itemClassMap.get(item.conta)

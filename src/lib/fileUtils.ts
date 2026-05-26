@@ -26,6 +26,10 @@ export function pickExcelFile(): Promise<ArrayBuffer | null> {
   return openFilePicker('.xlsx,.xls')
 }
 
+export function pickCSVFile(): Promise<ArrayBuffer | null> {
+  return openFilePicker('.csv')
+}
+
 export function pickBalanceteFile(): Promise<ArrayBuffer | null> {
   return openFilePicker('.csv,.xlsx,.xls')
 }

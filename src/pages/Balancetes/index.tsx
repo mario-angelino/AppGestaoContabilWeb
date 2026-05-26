@@ -2,9 +2,10 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Upload, Trash2, Eye, X, Building2, AlertTriangle, CheckCircle, CheckSquare, ArrowUpDown, ListChecks, PackageSearch, Plus } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { pickBalanceteFile } from '../../lib/fileUtils'
+import { pickExcelFile, pickCSVFile } from '../../lib/fileUtils'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,43 @@ function parseCSV(buf: ArrayBuffer): { mes: number | null; ano: number | null; r
       val_debito: parseBR(f[5]),
       val_credito: parseBR(f[6]),
       saldo_atual: naturezaAtual ? aplicarSinal(saldoAtual, f[0], naturezaAtual) : saldoAtual,
+    })
+  }
+
+  return { mes, ano, rows }
+}
+
+
+function parseXLS(buf: ArrayBuffer): { mes: number | null; ano: number | null; rows: ParsedRow[] } {
+  const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
+  const sheetName = wb.SheetNames.includes('Balancete') ? 'Balancete' : wb.SheetNames[0]
+  const ws = wb.Sheets[sheetName]
+  const data = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
+
+  let mes: number | null = null
+  let ano: number | null = null
+
+  // Period on row index 2 (row 3), col index 1: "01/11/2025 - 30/11/2025"
+  const periodoCell = String((data[2] as unknown[])?.[1] ?? '')
+  const m = periodoCell.match(/\d{2}\/(\d{2})\/(\d{4})/)
+  if (m) { mes = parseInt(m[1], 10); ano = parseInt(m[2], 10) }
+
+  const rows: ParsedRow[] = []
+  // Data rows start at index 7 (row 8 in spreadsheet)
+  for (const row of data.slice(7) as unknown[][]) {
+    const reduzido = Number(row[0])
+    const conta = String(row[1] ?? '').trim()
+    if (!conta || isNaN(reduzido) || reduzido === 0) continue
+    // Accounts starting with "1" (Ativo) keep the sign; all others are inverted
+    const sinal = conta.charAt(0) === '1' ? 1 : -1
+    rows.push({
+      conta,
+      reduzido,
+      descricao: String(row[3] ?? '').trim(),
+      saldo_anterior: (Number(row[5]) || 0) * sinal,
+      val_debito: Number(row[6]) || 0,
+      val_credito: Number(row[7]) || 0,
+      saldo_atual: (Number(row[9]) || 0) * sinal,
     })
   }
 
@@ -288,13 +326,13 @@ function ImportModal({
     [balancetes, detectedMes, detectedAno]
   )
 
-  const handleSelectFile = async () => {
+  const handleSelectWith = async (picker: () => Promise<ArrayBuffer | null>, parser: (buf: ArrayBuffer) => { mes: number | null; ano: number | null; rows: ParsedRow[] }) => {
     setLoading(true)
     setError('')
     try {
-      const raw = await pickBalanceteFile()
+      const raw = await picker()
       if (!raw) return
-      const { mes, ano, rows: parsed } = parseCSV(raw)
+      const { mes, ano, rows: parsed } = parser(raw)
       if (parsed.length === 0) { setError('Nenhum registro encontrado no arquivo.'); return }
       if (!mes || !ano) { setError('Não foi possível detectar o período no arquivo.'); return }
       setRows(parsed)
@@ -307,6 +345,9 @@ function ImportModal({
       setLoading(false)
     }
   }
+
+  const handleSelectExcel = () => handleSelectWith(pickExcelFile, parseXLS)
+  const handleSelectCSV   = () => handleSelectWith(pickCSVFile, parseCSV)
 
   const handleImport = async () => {
     if (!detectedMes || !detectedAno) return
@@ -369,20 +410,51 @@ function ImportModal({
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
           {step === 'idle' && (
-            <>
-              <p className="text-sm text-gray-500">
-                Selecione o arquivo CSV do balancete. O período (mês/ano) será detectado automaticamente a partir do cabeçalho do arquivo.
-              </p>
-              <button
-                onClick={handleSelectFile}
-                disabled={loading}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                <Upload size={15} />
-                {loading ? 'Lendo arquivo...' : 'Selecionar Arquivo'}
-              </button>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">Selecione o formato do arquivo a importar. Verifique a lógica de sinais antes de prosseguir.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                {/* XLS / XLSX */}
+                <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">XLS / XLSX</p>
+                    <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                      Contas iniciadas com <strong>1</strong> (Ativo): sinal mantido conforme o arquivo.<br />
+                      Contas <strong>2 em diante</strong> (Passivo, PL, DRE): sinal <em>invertido</em> automaticamente.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSelectExcel}
+                    disabled={loading}
+                    className="mt-auto flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    <Upload size={15} />
+                    {loading ? 'Lendo...' : 'Selecionar XLS / XLSX'}
+                  </button>
+                </div>
+
+                {/* CSV */}
+                <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">CSV</p>
+                    <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                      Arquivo texto separado por <strong>ponto-e-vírgula</strong>, codificação windows-1252.<br />
+                      Sinal corrigido pela coluna de natureza (D/C): conta <strong>1</strong> → D=positivo; demais → C=positivo.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSelectCSV}
+                    disabled={loading}
+                    className="mt-auto flex items-center justify-center gap-2 border border-blue-600 text-blue-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors disabled:opacity-50"
+                  >
+                    <Upload size={15} />
+                    {loading ? 'Lendo...' : 'Selecionar CSV'}
+                  </button>
+                </div>
+
+              </div>
               {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-            </>
+            </div>
           )}
 
           {step === 'preview' && detectedMes && detectedAno && (
@@ -490,6 +562,160 @@ function ImportModal({
   )
 }
 
+// ── BpDre Detalhe modal ───────────────────────────────────────────────────
+
+interface DetalheRow {
+  pciId: number
+  reduzido: number
+  conta: string
+  descricao: string
+  saldo_anterior: number
+  val_debito: number
+  val_credito: number
+  saldo_atual: number
+  idSubgrupo: number | null
+  idBpDre: number | null
+  subgrupo: string | null
+  bpDre: string | null
+  nota: string | null
+  papel: string | null
+}
+
+function BpDreDetalheModal({
+  bpDreId, bpDreDesc, balanceteId, planoContasId, onClose,
+}: {
+  bpDreId: number
+  bpDreDesc: string
+  balanceteId: number
+  planoContasId: number
+  onClose: () => void
+}) {
+  const { data: balItems = [], isLoading: loadingBal } = useQuery({
+    queryKey: ['detalhe_bal', balanceteId],
+    queryFn: async () => {
+      const PAGE = 1000; const all: { reduzido: number; conta: string; descricao: string; saldo_anterior: number; val_debito: number; val_credito: number; saldo_atual: number }[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase.from('balancete_itens')
+          .select('reduzido, conta, descricao, saldo_anterior, val_debito, val_credito, saldo_atual')
+          .eq('balancete_id', balanceteId).range(from, from + PAGE - 1)
+        if (error) throw error
+        all.push(...data)
+        if (data.length < PAGE) break
+      }
+      return all
+    },
+  })
+
+  const { data: planoItems = [], isLoading: loadingPlano } = useQuery({
+    queryKey: ['detalhe_plano', planoContasId, bpDreId],
+    queryFn: async () => {
+      const PAGE = 1000
+      const all: { id: number; reduzido: number; id_class_subgrupo: number | null; id_class_bp_dre: number | null; class_subgrupo: { sigla_subgrupo: string } | null; class_bp_dre: { desc_bp_dre: string } | null; class_nota_explicativa: { desc_ne: string } | null; class_papel_trabalho: { sigla_papel: string } | null }[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase.from('plano_contas_itens')
+          .select('id, reduzido, id_class_subgrupo, id_class_bp_dre, class_subgrupo(sigla_subgrupo), class_bp_dre(desc_bp_dre), class_nota_explicativa(desc_ne), class_papel_trabalho(sigla_papel)')
+          .eq('id_plano_contas', planoContasId).eq('id_class_bp_dre', bpDreId).range(from, from + PAGE - 1)
+        if (error) throw error
+        all.push(...(data as typeof all))
+        if (data.length < PAGE) break
+      }
+      return all
+    },
+  })
+
+  const rows = useMemo((): DetalheRow[] => {
+    const planoMap = new Map(planoItems.map(p => [p.reduzido, p]))
+    return balItems
+      .filter(b => planoMap.has(b.reduzido))
+      .map(b => {
+        const p = planoMap.get(b.reduzido)!
+        return {
+          ...b,
+          pciId: p.id,
+          idSubgrupo: p.id_class_subgrupo,
+          idBpDre: p.id_class_bp_dre,
+          subgrupo: p.class_subgrupo?.sigla_subgrupo ?? null,
+          bpDre: p.class_bp_dre?.desc_bp_dre ?? null,
+          nota: p.class_nota_explicativa?.desc_ne ?? null,
+          papel: p.class_papel_trabalho?.sigla_papel ?? null,
+        }
+      })
+      .sort((a, b) => a.conta.localeCompare(b.conta))
+  }, [balItems, planoItems])
+
+  const total = rows.reduce((acc, r) => acc + r.saldo_atual, 0)
+  const loading = loadingBal || loadingPlano
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h3 className="font-semibold text-gray-800">Detalhe — {bpDreDesc}</h3>
+            <p className="text-xs text-gray-400 mt-0.5">{rows.length} conta{rows.length !== 1 ? 's' : ''} · clique em fechar para voltar</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+
+        <div className="flex-1 overflow-auto px-6 py-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-12">Nenhuma conta encontrada para esta classificação.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-gray-50 z-10">
+                <tr>
+                  {['PCI#', 'Red.', 'Conta', 'Descrição', 'Saldo Ant.', 'Saldo Atual', 'SG (id)', 'BP/DRE (id)', 'Nota Exp.', 'Papel'].map(h => (
+                    <th key={h} className="text-left px-2 py-2 text-gray-500 font-semibold whitespace-nowrap border-b border-gray-200">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-2 py-1.5 font-mono text-gray-400 whitespace-nowrap text-[10px]">#{r.pciId}</td>
+                    <td className="px-2 py-1.5 font-mono text-gray-500 whitespace-nowrap">{r.reduzido}</td>
+                    <td className="px-2 py-1.5 font-mono text-gray-700 whitespace-nowrap">{r.conta}</td>
+                    <td className="px-2 py-1.5 text-gray-700 max-w-[160px] truncate" title={r.descricao}>{r.descricao}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-gray-500 whitespace-nowrap">{fmtBR(r.saldo_anterior)}</td>
+                    <td className={`px-2 py-1.5 text-right font-mono font-medium whitespace-nowrap ${r.saldo_atual < 0 ? 'text-red-600' : 'text-gray-800'}`}>{fmtBR(r.saldo_atual)}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">
+                      {r.subgrupo
+                        ? <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-semibold">{r.subgrupo}</span>
+                        : <span className="text-gray-300">—</span>}
+                      {r.idSubgrupo != null && <span className="ml-1 text-gray-400 text-[10px]">#{r.idSubgrupo}</span>}
+                    </td>
+                    <td className="px-2 py-1.5 max-w-[140px]" title={r.bpDre ?? ''}>
+                      <span className="truncate block text-gray-600">{r.bpDre ?? <span className="text-gray-300">—</span>}</span>
+                      {r.idBpDre != null && <span className="text-gray-400 text-[10px]">#{r.idBpDre}</span>}
+                    </td>
+                    <td className="px-2 py-1.5 text-gray-500 max-w-[120px] truncate" title={r.nota ?? ''}>{r.nota ?? <span className="text-gray-300">—</span>}</td>
+                    <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap">{r.papel ?? <span className="text-gray-300">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="sticky bottom-0 bg-gray-50 border-t-2 border-gray-200">
+                <tr>
+                  <td colSpan={5} className="px-2 py-2 font-semibold text-gray-600 text-xs">Total ({rows.length} contas)</td>
+                  <td className={`px-2 py-2 text-right font-mono font-bold text-sm whitespace-nowrap ${total < 0 ? 'text-red-600' : 'text-gray-800'}`}>{fmtBR(total)}</td>
+                  <td colSpan={4} />
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end flex-shrink-0">
+          <button onClick={onClose} className="border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm hover:bg-gray-50 transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Validação modal ────────────────────────────────────────────────────────
 
 interface SubgrupoVal {
@@ -508,6 +734,7 @@ interface BpDreSubgrupoLink {
 }
 
 interface PlanoItem {
+  conta: string
   reduzido: number
   id_class_bp_dre: number | null
   id_class_subgrupo: number | null
@@ -558,11 +785,11 @@ function ValidacaoModal({
     queryKey: ['balancete_itens_validacao', balancete.id],
     queryFn: async () => {
       const PAGE = 1000
-      const all: { reduzido: number; saldo_atual: number }[] = []
+      const all: { conta: string; reduzido: number; saldo_atual: number }[] = []
       for (let from = 0; ; from += PAGE) {
         const { data, error } = await supabase
           .from('balancete_itens')
-          .select('reduzido, saldo_atual')
+          .select('conta, reduzido, saldo_atual')
           .eq('balancete_id', balancete.id)
           .range(from, from + PAGE - 1)
         if (error) throw error
@@ -581,7 +808,7 @@ function ValidacaoModal({
       for (let from = 0; ; from += PAGE) {
         const { data, error } = await supabase
           .from('plano_contas_itens')
-          .select('reduzido, id_class_bp_dre, id_class_subgrupo, class_bp_dre(id, desc_bp_dre), class_subgrupo(id, sigla_subgrupo, desc_subgrupo)')
+          .select('conta, reduzido, id_class_bp_dre, id_class_subgrupo, class_bp_dre(id, desc_bp_dre), class_subgrupo(id, sigla_subgrupo, desc_subgrupo)')
           .eq('id_plano_contas', vigencia.plano_contas.id)
           .not('id_class_bp_dre', 'is', null)
           .range(from, from + PAGE - 1)
@@ -606,6 +833,8 @@ function ValidacaoModal({
   })
 
   const loading = loadingItems || loadingPlano || loadingLinks
+
+  const [detalheItem, setDetalheItem] = useState<{ bpDreId: number; desc: string } | null>(null)
 
   const { gruposResultado, gruposBP, totalResultado, totalAtivo, totalPassivoEPL } =
     useMemo(() => {
@@ -640,10 +869,10 @@ function ValidacaoModal({
       // ── Passo 2: mapear reduzido → { bpId, sgId } ─────────────────────────
       // sgId pode ser null — RESULTADO e PL são identificados pelo bpId, não pelo sgId
       type ItemClass = { bpId: number; sgId: number | null }
-      const itemClassMap = new Map<number, ItemClass>()
+      const itemClassMap = new Map<string, ItemClass>()
       for (const pi of planoItens) {
         if (!pi.id_class_bp_dre) continue
-        itemClassMap.set(pi.reduzido, { bpId: pi.id_class_bp_dre, sgId: pi.id_class_subgrupo })
+        itemClassMap.set(pi.conta, { bpId: pi.id_class_bp_dre, sgId: pi.id_class_subgrupo })
       }
 
       // ── Passo 3: acumular saldos ───────────────────────────────────────────
@@ -654,7 +883,7 @@ function ValidacaoModal({
       const saldoBP  = new Map<string, number>()
 
       for (const item of bItems) {
-        const cls = itemClassMap.get(item.reduzido)
+        const cls = itemClassMap.get(item.conta)
         if (!cls) continue
         if (dreSet.has(cls.bpId)) {
           saldoDRE.set(cls.bpId, (saldoDRE.get(cls.bpId) ?? 0) + item.saldo_atual)
@@ -746,7 +975,7 @@ function ValidacaoModal({
               Validação do Balancete — {mesNome(balancete.mes)}/{balancete.ano}
             </h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              {vigencia.empresa.abreviacao} — Plano: {vigencia.plano_contas.nome}
+              {vigencia.empresa.abreviacao} — Plano: {vigencia.plano_contas.nome} · <span className="italic">Clique em uma linha para ver as contas</span>
             </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -778,8 +1007,8 @@ function ValidacaoModal({
                   <tbody>
                     {gruposResultado.flatMap((g) =>
                       g.itens.map((item) => (
-                        <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50">
-                          <td className="py-1.5 text-gray-700">{item.desc_bp_dre}</td>
+                        <tr key={item.id} className="border-b border-gray-50 hover:bg-blue-50 cursor-pointer" onClick={() => setDetalheItem({ bpDreId: item.id, desc: item.desc_bp_dre })}>
+                          <td className="py-1.5 text-gray-700 hover:text-blue-700">{item.desc_bp_dre}</td>
                           <td className="py-1.5 text-right font-mono text-gray-700">{fmtValModal(item.saldo)}</td>
                         </tr>
                       ))
@@ -818,8 +1047,8 @@ function ValidacaoModal({
                       <table className="w-full text-sm">
                         <tbody>
                           {g.itens.map((item) => (
-                            <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50">
-                              <td className="py-1.5 text-gray-700 pl-3">{item.desc_bp_dre}</td>
+                            <tr key={item.id} className="border-b border-gray-50 hover:bg-blue-50 cursor-pointer" onClick={() => setDetalheItem({ bpDreId: item.id, desc: item.desc_bp_dre })}>
+                              <td className="py-1.5 text-gray-700 pl-3 hover:text-blue-700">{item.desc_bp_dre}</td>
                               <td className="py-1.5 text-right font-mono text-gray-700">{fmtValModal(item.saldo)}</td>
                             </tr>
                           ))}
@@ -890,6 +1119,16 @@ function ValidacaoModal({
           </button>
         </div>
       </div>
+
+      {detalheItem && (
+        <BpDreDetalheModal
+          bpDreId={detalheItem.bpDreId}
+          bpDreDesc={detalheItem.desc}
+          balanceteId={balancete.id}
+          planoContasId={vigencia.plano_contas.id}
+          onClose={() => setDetalheItem(null)}
+        />
+      )}
     </div>
   )
 }

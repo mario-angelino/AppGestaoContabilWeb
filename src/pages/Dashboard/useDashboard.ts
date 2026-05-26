@@ -10,7 +10,7 @@ export interface BpDreOption { id: number; desc_bp_dre: string }
 export interface RawVigencia { id: number; empresa_id: number; plano_contas_id: number; ano_vigencia: number }
 export interface RawBalancete { id: number; vigencia_id: number; mes: number; ano: number; dt_importacao: string | null; user_importacao: string | null }
 export interface RawPlanoItem {
-  id_plano_contas: number; reduzido: number
+  id_plano_contas: number; conta: string; reduzido: number
   id_class_bp_dre: number | null; id_class_subgrupo: number | null
   class_subgrupo: { sigla_subgrupo: string } | null
 }
@@ -129,7 +129,7 @@ export function useDashboardData(ano: number, empresaIds: number[]) {
         for (let from = 0; ; from += PAGE) {
           const { data, error } = await supabase
             .from('plano_contas_itens')
-            .select('id_plano_contas, reduzido, id_class_bp_dre, id_class_subgrupo, class_subgrupo(sigla_subgrupo)')
+            .select('id_plano_contas, conta, reduzido, id_class_bp_dre, id_class_subgrupo, class_subgrupo(sigla_subgrupo)')
             .eq('id_plano_contas', pid)
             .not('id_class_bp_dre', 'is', null)
             .range(from, from + PAGE - 1)
@@ -183,7 +183,7 @@ export function useDashboardData(ano: number, empresaIds: number[]) {
     const planoItemMap = new Map<string, PlanoItemCls>()
     for (const pi of planoItems) {
       if (pi.id_class_bp_dre === null) continue
-      planoItemMap.set(`${pi.id_plano_contas}|${pi.reduzido}`, {
+      planoItemMap.set(`${pi.id_plano_contas}|${pi.conta}`, {
         sgId:    pi.id_class_subgrupo,
         bpDreId: pi.id_class_bp_dre,
         sigla:   (pi.class_subgrupo?.sigla_subgrupo ?? '').toUpperCase()
@@ -204,7 +204,7 @@ export function useDashboardData(ano: number, empresaIds: number[]) {
       if (!bal) continue
       const vig = vigenciaMap.get(bal.vigencia_id)
       if (!vig) continue
-      const cls = planoItemMap.get(`${vig.plano_contas_id}|${item.reduzido}`)
+      const cls = planoItemMap.get(`${vig.plano_contas_id}|${item.conta}`)
       if (!cls) continue
       const mes = bal.mes
 

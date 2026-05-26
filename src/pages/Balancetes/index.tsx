@@ -673,7 +673,7 @@ function BpDreDetalheModal({
           .select('id, reduzido, id_class_subgrupo, id_class_bp_dre, class_subgrupo(sigla_subgrupo), class_bp_dre(desc_bp_dre), class_nota_explicativa(desc_ne), class_papel_trabalho(sigla_papel)')
           .eq('id_plano_contas', planoContasId).eq('id_class_bp_dre', bpDreId).range(from, from + PAGE - 1)
         if (error) throw error
-        all.push(...(data as typeof all))
+        all.push(...(data as unknown as typeof all))
         if (data.length < PAGE) break
       }
       return all
@@ -850,7 +850,7 @@ function ValidacaoModal({
           .eq('balancete_id', balancete.id)
           .range(from, from + PAGE - 1)
         if (error) throw error
-        all.push(...(data as { reduzido: number; saldo_atual: number }[]))
+        all.push(...(data as { conta: string; reduzido: number; saldo_atual: number }[]))
         if (data.length < PAGE) break
       }
       return all

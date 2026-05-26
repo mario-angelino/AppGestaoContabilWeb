@@ -151,6 +151,43 @@ function parseXLS(buf: ArrayBuffer): { mes: number | null; ano: number | null; r
   return { mes, ano, rows }
 }
 
+function parseXLSAccion(buf: ArrayBuffer): { mes: number | null; ano: number | null; rows: ParsedRow[] } {
+  const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
+  const sheetName = wb.SheetNames.includes('Relatório') ? 'Relatório' : wb.SheetNames[0]
+  const ws = wb.Sheets[sheetName]
+  const data = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
+
+  let mes: number | null = null
+  let ano: number | null = null
+
+  // Period on row 4, col 22: "01/01/2025 a 31/01/2025"
+  const periodoCell = String((data[4] as unknown[])?.[22] ?? '')
+  const m = periodoCell.match(/\d{2}\/(\d{2})\/(\d{4})/)
+  if (m) { mes = parseInt(m[1], 10); ano = parseInt(m[2], 10) }
+
+  const rows: ParsedRow[] = []
+  for (const row of data.slice(7) as unknown[][]) {
+    const conta = String(row[0] ?? '').trim()
+    const reduzido = Number(row[3])
+    if (!conta || isNaN(reduzido) || reduzido === 0) continue
+    const naturezaAnt  = String(row[12] ?? '').trim()
+    const naturezaAtual = String(row[24] ?? '').trim()
+    const saldoAnt   = Number(row[10]) || 0
+    const saldoAtual = Number(row[22]) || 0
+    rows.push({
+      conta,
+      reduzido,
+      descricao: String(row[4] ?? '').trim(),
+      saldo_anterior: naturezaAnt   ? aplicarSinal(saldoAnt,   conta, naturezaAnt)   : saldoAnt,
+      val_debito:  Number(row[13]) || 0,
+      val_credito: Number(row[19]) || 0,
+      saldo_atual: naturezaAtual ? aplicarSinal(saldoAtual, conta, naturezaAtual) : saldoAtual,
+    })
+  }
+
+  return { mes, ano, rows }
+}
+
 // ── Items viewer modal ─────────────────────────────────────────────────────
 
 function ItemsModal({
@@ -346,8 +383,9 @@ function ImportModal({
     }
   }
 
-  const handleSelectExcel = () => handleSelectWith(pickExcelFile, parseXLS)
-  const handleSelectCSV   = () => handleSelectWith(pickCSVFile, parseCSV)
+  const handleSelectExcel         = () => handleSelectWith(pickExcelFile, parseXLS)
+  const handleSelectExcelAccion   = () => handleSelectWith(pickExcelFile, parseXLSAccion)
+  const handleSelectCSV           = () => handleSelectWith(pickCSVFile, parseCSV)
 
   const handleImport = async () => {
     if (!detectedMes || !detectedAno) return
@@ -412,7 +450,7 @@ function ImportModal({
           {step === 'idle' && (
             <div className="space-y-3">
               <p className="text-sm text-gray-500">Selecione o formato do arquivo a importar. Verifique a lógica de sinais antes de prosseguir.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
                 {/* XLS / XLSX */}
                 <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
@@ -430,6 +468,25 @@ function ImportModal({
                   >
                     <Upload size={15} />
                     {loading ? 'Lendo...' : 'Selecionar XLS / XLSX'}
+                  </button>
+                </div>
+
+                {/* XLSX — Formato Vera Cruz */}
+                <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">XLSX — ACCION</p>
+                    <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                      Planilha com aba <strong>Relatório</strong>, colunas em posições distintas.<br />
+                      Sinal corrigido pela coluna de natureza (D/C): conta <strong>1</strong> → D=positivo; demais → C=positivo.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSelectExcelAccion}
+                    disabled={loading}
+                    className="mt-auto flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    <Upload size={15} />
+                    {loading ? 'Lendo...' : 'Selecionar XLSX (ACCION)'}
                   </button>
                 </div>
 

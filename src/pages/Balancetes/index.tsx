@@ -114,6 +114,53 @@ function parseCSV(buf: ArrayBuffer): { mes: number | null; ano: number | null; r
   return { mes, ano, rows }
 }
 
+function parseCSVAjax(buf: ArrayBuffer): { mes: number | null; ano: number | null; rows: ParsedRow[] } {
+  const text = new TextDecoder('windows-1252').decode(new Uint8Array(buf))
+  const lines = text.split(/\r?\n/)
+
+  let mes: number | null = null
+  let ano: number | null = null
+
+  // Period is on line index 2, field index 1: "01/01/2025 - 31/01/2025"
+  if (lines[2]) {
+    const fields = lines[2].split(';').map((f) => f.replace(/^"|"$/g, '').trim())
+    const m = fields[1]?.match(/\d{2}\/(\d{2})\/(\d{4})/)
+    if (m) { mes = parseInt(m[1], 10); ano = parseInt(m[2], 10) }
+  }
+
+  // Saldo field has the nature suffix merged into the value: "25.508.478,58d" or "259.011,50c"
+  function parseSaldoAjax(raw: string): { value: number; natureza: string } {
+    const s = raw.trim()
+    const last = s.slice(-1).toLowerCase()
+    if (last === 'd' || last === 'c') {
+      return { value: parseBR(s.slice(0, -1)), natureza: last.toUpperCase() }
+    }
+    return { value: parseBR(s), natureza: '' }
+  }
+
+  const rows: ParsedRow[] = []
+  for (const line of lines.slice(7)) {
+    if (!line.trim()) continue
+    const f = line.split(';').map((v) => v.replace(/^"|"$/g, '').trim())
+    if (f.length < 13 || !f[0] || !f[1]) continue
+    const reduzido = parseInt(f[0], 10)
+    if (isNaN(reduzido)) continue
+    const conta = f[1]
+    const saldoAnt = parseSaldoAjax(f[6])
+    const saldoAtual = parseSaldoAjax(f[12])
+    rows.push({
+      conta,
+      reduzido,
+      descricao: f[3] || '',
+      saldo_anterior: saldoAnt.natureza ? aplicarSinal(saldoAnt.value, conta, saldoAnt.natureza) : saldoAnt.value,
+      val_debito: parseBR(f[8]),
+      val_credito: parseBR(f[10]),
+      saldo_atual: saldoAtual.natureza ? aplicarSinal(saldoAtual.value, conta, saldoAtual.natureza) : saldoAtual.value,
+    })
+  }
+
+  return { mes, ano, rows }
+}
 
 function parseXLS(buf: ArrayBuffer): { mes: number | null; ano: number | null; rows: ParsedRow[] } {
   const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
@@ -386,6 +433,7 @@ function ImportModal({
   const handleSelectExcel         = () => handleSelectWith(pickExcelFile, parseXLS)
   const handleSelectExcelAccion   = () => handleSelectWith(pickExcelFile, parseXLSAccion)
   const handleSelectCSV           = () => handleSelectWith(pickCSVFile, parseCSV)
+  const handleSelectCSVAjax       = () => handleSelectWith(pickCSVFile, parseCSVAjax)
 
   const handleImport = async () => {
     if (!detectedMes || !detectedAno) return
@@ -450,7 +498,7 @@ function ImportModal({
           {step === 'idle' && (
             <div className="space-y-3">
               <p className="text-sm text-gray-500">Selecione o formato do arquivo a importar. Verifique a lógica de sinais antes de prosseguir.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
                 {/* XLS / XLSX */}
                 <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
@@ -506,6 +554,25 @@ function ImportModal({
                   >
                     <Upload size={15} />
                     {loading ? 'Lendo...' : 'Selecionar CSV'}
+                  </button>
+                </div>
+
+                {/* CSV — AJAX */}
+                <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">CSV — AJAX</p>
+                    <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                      Arquivo CSV da AJAX: separador <strong>ponto-e-vírgula</strong>, windows-1252.<br />
+                      Saldo Anterior e Atual com sufixo <strong>d</strong>/<strong>c</strong> embutido no valor. Sinal corrigido pela natureza: conta <strong>1</strong> → d=positivo; demais → c=positivo.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSelectCSVAjax}
+                    disabled={loading}
+                    className="mt-auto flex items-center justify-center gap-2 border border-blue-600 text-blue-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors disabled:opacity-50"
+                  >
+                    <Upload size={15} />
+                    {loading ? 'Lendo...' : 'Selecionar CSV (AJAX)'}
                   </button>
                 </div>
 

@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { pickExcelFile, pickCSVFile } from '../../lib/fileUtils'
+import { calcularDF, isAtivoSg, isPLSg, type SubgrupoVal, type BpDreSubgrupoLink, type PlanoItem, type GrupoVal } from '../../lib/dfUtils'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -842,55 +843,6 @@ function BpDreDetalheModal({
 
 // ── Validação modal ────────────────────────────────────────────────────────
 
-interface SubgrupoVal {
-  id: number
-  sigla_subgrupo: string
-  desc_subgrupo: string | null
-}
-
-interface BpDreSubgrupoLink {
-  id: number
-  indice: number | null
-  id_class_bp_dre: number
-  id_class_subgrupo: number
-  class_bp_dre: { id: number; desc_bp_dre: string } | null
-  class_subgrupo: SubgrupoVal | null
-}
-
-interface PlanoItem {
-  conta: string
-  reduzido: number
-  id_class_bp_dre: number | null
-  id_class_subgrupo: number | null
-  class_bp_dre: { id: number; desc_bp_dre: string } | null
-  class_subgrupo: { id: number; sigla_subgrupo: string; desc_subgrupo: string | null } | null
-}
-
-interface GrupoVal {
-  subgrupo: SubgrupoVal
-  itens: { id: number; desc_bp_dre: string; saldo: number }[]
-  subtotal: number
-}
-
-function isResultadoSg(sg: SubgrupoVal): boolean {
-  return (
-    sg.sigla_subgrupo.toUpperCase() === 'RESULTADO' ||
-    (sg.desc_subgrupo ?? '').toUpperCase() === 'RESULTADO'
-  )
-}
-
-function isPLSg(sg: SubgrupoVal): boolean {
-  const s = sg.sigla_subgrupo.toUpperCase()
-  const d = (sg.desc_subgrupo ?? '').toLowerCase()
-  return s === 'PL' || d.includes('patrimônio') || d.includes('patrimonio')
-}
-
-function isAtivoSg(sg: SubgrupoVal): boolean {
-  const d = (sg.desc_subgrupo ?? '').toLowerCase()
-  const s = sg.sigla_subgrupo.toUpperCase()
-  return d.includes('ativo') || s === 'AC' || s === 'ANC'
-}
-
 function fmtValModal(v: number): React.ReactNode {
   if (v < 0) return <span className="text-red-700 font-mono">({fmtBR(v)})</span>
   return fmtBR(v)
@@ -961,131 +913,7 @@ function ValidacaoModal({
   const [detalheItem, setDetalheItem] = useState<{ bpDreId: number; desc: string } | null>(null)
 
   const { gruposResultado, gruposBP, totalResultado, totalAtivo, totalPassivoEPL } =
-    useMemo(() => {
-      // ── Passo 1: classificar itens do N:N em três categorias ──────────────
-      // RESULTADO e PL são exclusivos (um bp_dre só pode estar em um deles).
-      // AC/ANC/PC/PNC podem compartilhar o mesmo bp_dre entre si.
-      const dreSet = new Set<number>() // bp_dre do subgrupo RESULTADO
-      const plSet = new Set<number>() // bp_dre do subgrupo PL
-
-      type Entry = { bpId: number; desc: string; indice: number | null }
-      const dreEntriesMap = new Map<number, Entry>()
-      const plEntriesMap = new Map<number, Entry>()
-      let plSubgrupo: SubgrupoVal | null = null
-      const indiceMapBP = new Map<string, number | null>() // "sgId|bpId" para AC/ANC/PC/PNC
-
-      for (const link of links) {
-        if (!link.class_bp_dre || !link.class_subgrupo) continue
-        if (isResultadoSg(link.class_subgrupo)) {
-          dreSet.add(link.id_class_bp_dre)
-          if (!dreEntriesMap.has(link.id_class_bp_dre))
-            dreEntriesMap.set(link.id_class_bp_dre, { bpId: link.id_class_bp_dre, desc: link.class_bp_dre.desc_bp_dre, indice: link.indice })
-        } else if (isPLSg(link.class_subgrupo)) {
-          plSet.add(link.id_class_bp_dre)
-          plSubgrupo = link.class_subgrupo
-          if (!plEntriesMap.has(link.id_class_bp_dre))
-            plEntriesMap.set(link.id_class_bp_dre, { bpId: link.id_class_bp_dre, desc: link.class_bp_dre.desc_bp_dre, indice: link.indice })
-        } else {
-          indiceMapBP.set(`${link.id_class_subgrupo}|${link.id_class_bp_dre}`, link.indice)
-        }
-      }
-
-      // ── Passo 2: mapear reduzido → { bpId, sgId } ─────────────────────────
-      // sgId pode ser null — RESULTADO e PL são identificados pelo bpId, não pelo sgId
-      type ItemClass = { bpId: number; sgId: number | null }
-      const itemClassMap = new Map<string, ItemClass>()
-      for (const pi of planoItens) {
-        if (!pi.id_class_bp_dre) continue
-        itemClassMap.set(pi.conta, { bpId: pi.id_class_bp_dre, sgId: pi.id_class_subgrupo })
-      }
-
-      // ── Passo 3: acumular saldos ───────────────────────────────────────────
-      // DRE (dreSet) e PL (plSet): acumulam por bpId (sem risco de duplicação)
-      // AC/ANC/PC/PNC: acumulam por "sgId|bpId" (evita duplicação entre subgrupos)
-      const saldoDRE = new Map<number, number>()
-      const saldoPL = new Map<number, number>()
-      const saldoBP = new Map<string, number>()
-
-      for (const item of bItems) {
-        const cls = itemClassMap.get(item.conta)
-        if (!cls) continue
-        if (dreSet.has(cls.bpId)) {
-          saldoDRE.set(cls.bpId, (saldoDRE.get(cls.bpId) ?? 0) + item.saldo_atual)
-        } else if (plSet.has(cls.bpId)) {
-          saldoPL.set(cls.bpId, (saldoPL.get(cls.bpId) ?? 0) + item.saldo_atual)
-        } else if (cls.sgId !== null) {
-          const key = `${cls.sgId}|${cls.bpId}`
-          saldoBP.set(key, (saldoBP.get(key) ?? 0) + item.saldo_atual)
-        }
-      }
-
-      // ── Passo 4: seção RESULTADO ───────────────────────────────────────────
-      const sortEntries = (a: Entry, b: Entry) => {
-        if (a.indice != null && b.indice != null) return a.indice - b.indice
-        if (a.indice != null) return -1
-        if (b.indice != null) return 1
-        return a.desc.localeCompare(b.desc)
-      }
-      const dreItems = Array.from(dreEntriesMap.values()).sort(sortEntries)
-      const gruposResultado: GrupoVal[] = dreItems.length > 0 ? [{
-        subgrupo: { id: -1, sigla_subgrupo: 'RESULTADO', desc_subgrupo: null },
-        itens: dreItems.map(d => ({ id: d.bpId, desc_bp_dre: d.desc, saldo: saldoDRE.get(d.bpId) ?? 0 })),
-        subtotal: dreItems.reduce((acc, d) => acc + (saldoDRE.get(d.bpId) ?? 0), 0),
-      }] : []
-
-      // ── Passo 5: seção PL ──────────────────────────────────────────────────
-      const plItems = Array.from(plEntriesMap.values()).sort(sortEntries)
-      const grupoPL: GrupoVal | null = plSubgrupo && plItems.length > 0 ? {
-        subgrupo: plSubgrupo,
-        itens: plItems.map(p => ({ id: p.bpId, desc_bp_dre: p.desc, saldo: saldoPL.get(p.bpId) ?? 0 })),
-        subtotal: plItems.reduce((acc, p) => acc + (saldoPL.get(p.bpId) ?? 0), 0),
-      } : null
-
-      // ── Passo 6: seção AC/ANC/PC/PNC (chave composta) ─────────────────────
-      type BpDreRow = { id: number; desc_bp_dre: string; saldo: number; indice: number | null }
-      const grupoMapBP = new Map<number, { subgrupo: SubgrupoVal; itensMap: Map<number, BpDreRow>; subtotal: number }>()
-
-      for (const pi of planoItens) {
-        if (!pi.id_class_bp_dre || !pi.id_class_subgrupo || !pi.class_bp_dre || !pi.class_subgrupo) continue
-        if (dreSet.has(pi.id_class_bp_dre) || plSet.has(pi.id_class_bp_dre)) continue
-
-        const compositeKey = `${pi.id_class_subgrupo}|${pi.id_class_bp_dre}`
-        if (!grupoMapBP.has(pi.id_class_subgrupo))
-          grupoMapBP.set(pi.id_class_subgrupo, { subgrupo: pi.class_subgrupo, itensMap: new Map(), subtotal: 0 })
-        const g = grupoMapBP.get(pi.id_class_subgrupo)!
-        if (!g.itensMap.has(pi.id_class_bp_dre)) {
-          const saldo = saldoBP.get(compositeKey) ?? 0
-          g.itensMap.set(pi.id_class_bp_dre, { id: pi.id_class_bp_dre, desc_bp_dre: pi.class_bp_dre.desc_bp_dre, saldo, indice: indiceMapBP.get(compositeKey) ?? null })
-          g.subtotal += saldo
-        }
-      }
-
-      const gruposBP: GrupoVal[] = []
-      for (const g of grupoMapBP.values()) {
-        const sorted = Array.from(g.itensMap.values()).sort((a, b) => {
-          if (a.indice != null && b.indice != null) return a.indice - b.indice
-          if (a.indice != null) return -1
-          if (b.indice != null) return 1
-          return a.desc_bp_dre.localeCompare(b.desc_bp_dre)
-        })
-        gruposBP.push({ subgrupo: g.subgrupo, itens: sorted.map(({ id, desc_bp_dre, saldo }) => ({ id, desc_bp_dre, saldo })), subtotal: g.subtotal })
-      }
-      // AC/ANC/PC/PNC em ordem alfabética, PL sempre por último
-      gruposBP.sort((a, b) => a.subgrupo.sigla_subgrupo.localeCompare(b.subgrupo.sigla_subgrupo))
-      if (grupoPL) gruposBP.push(grupoPL)
-
-      // ── Totais para verificação ────────────────────────────────────────────
-      const totalResultado = gruposResultado[0]?.subtotal ?? 0
-      let totalAtivo = 0
-      let totalPassivoEPL = 0
-      for (const g of gruposBP) {
-        if (isAtivoSg(g.subgrupo)) totalAtivo += g.subtotal
-        else totalPassivoEPL += g.subtotal
-      }
-      totalPassivoEPL += totalResultado
-
-      return { gruposResultado, gruposBP, totalResultado, totalAtivo, totalPassivoEPL }
-    }, [bItems, planoItens, links])
+    useMemo(() => calcularDF(bItems, planoItens, links), [bItems, planoItens, links])
 
   const equilibrado = Math.abs(totalAtivo - totalPassivoEPL) < 0.01
 

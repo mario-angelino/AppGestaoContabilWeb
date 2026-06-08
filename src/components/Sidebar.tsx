@@ -10,7 +10,9 @@ import {
   LogOut,
   FolderTree,
   Scale,
-  LayoutDashboard
+  LayoutDashboard,
+  TrendingUp,
+  PieChart
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useActivePlan } from '../contexts/ActivePlanContext'
@@ -28,10 +30,9 @@ function NavItem({ to, icon, label, end = false }: NavItemProps): JSX.Element {
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-          isActive
-            ? 'bg-blue-600 text-white'
-            : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+        `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${isActive
+          ? 'bg-blue-600 text-white'
+          : 'text-gray-300 hover:bg-gray-700 hover:text-white'
         }`
       }
     >
@@ -58,7 +59,7 @@ export default function Sidebar(): JSX.Element {
       {/* Logo */}
       <div className="px-4 py-5 border-b border-gray-800">
         <h1 className="text-sm font-bold text-white leading-tight">
-          Gestão Plano de Contas
+          Gestão Contábil Ebisa
         </h1>
       </div>
 
@@ -77,6 +78,10 @@ export default function Sidebar(): JSX.Element {
           label="Balancetes"
           end
         />
+
+        <SectionLabel label="DFs" />
+        <NavItem to="/dfs/dre" icon={<TrendingUp size={16} />} label="DRE" end />
+        <NavItem to="/dfs/bp" icon={<PieChart size={16} />} label="Balanço Patrimonial" end />
 
         <SectionLabel label="Auxiliar" />
         <NavItem to="/vigencias" icon={<Calendar size={16} />} label="Vigências" end />

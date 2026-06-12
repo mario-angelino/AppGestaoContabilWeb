@@ -12,7 +12,7 @@ import {
   Scale,
   LayoutDashboard,
   TrendingUp,
-  PieChart
+  StickyNote
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useActivePlan } from '../contexts/ActivePlanContext'
@@ -80,8 +80,12 @@ export default function Sidebar(): JSX.Element {
         />
 
         <SectionLabel label="DFs" />
-        <NavItem to="/dfs/dre" icon={<TrendingUp size={16} />} label="DRE" end />
-        <NavItem to="/dfs/bp" icon={<PieChart size={16} />} label="Balanço Patrimonial" end />
+        <NavItem to="/dfs/demonstracoes" icon={<TrendingUp size={16} />} label="Demonstrações" end />
+        <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 cursor-default opacity-60">
+          <span className="w-4 h-4 flex-shrink-0"><StickyNote size={16} /></span>
+          Notas
+          <span className="ml-auto text-[10px] uppercase tracking-wide bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded">em breve</span>
+        </div>
 
         <SectionLabel label="Auxiliar" />
         <NavItem to="/vigencias" icon={<Calendar size={16} />} label="Vigências" end />

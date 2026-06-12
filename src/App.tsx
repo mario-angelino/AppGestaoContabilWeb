@@ -16,8 +16,7 @@ import ClassNotaExplicativa from './pages/crud/ClassNotaExplicativa'
 import ClassPapelTrabalho from './pages/crud/ClassPapelTrabalho'
 import Balancetes from './pages/Balancetes'
 import Dashboard from './pages/Dashboard'
-import DRE from './pages/DFs/DRE'
-import BP from './pages/DFs/BP'
+import Demonstracoes from './pages/DFs/Demonstracoes'
 
 const queryClient = new QueryClient()
 
@@ -36,8 +35,7 @@ function App(): JSX.Element {
                   <Route path="/planos" element={<PlanoContas />} />
                   <Route path="/planos/:id/itens" element={<ItensPlano />} />
                   <Route path="/balancetes" element={<Balancetes />} />
-                  <Route path="/dfs/dre" element={<DRE />} />
-                  <Route path="/dfs/bp" element={<BP />} />
+                  <Route path="/dfs/demonstracoes" element={<Demonstracoes />} />
                   <Route path="/vigencias" element={<Vigencias />} />
                   <Route path="/empresas" element={<Empresas />} />
                   <Route path="/crud/grupo" element={<ClassGrupo />} />

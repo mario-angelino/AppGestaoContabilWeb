@@ -1,3 +1,14 @@
+export const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+export function fmtMoeda(v: number): string {
+  const abs = Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return v < 0 ? `(${abs})` : abs
+}
+
+export function periodoLabel(p: { mes: number; ano: number }): string {
+  return `${MESES[p.mes - 1]}/${p.ano}`
+}
+
 export interface SubgrupoVal {
   id: number
   sigla_subgrupo: string

@@ -1,25 +1,10 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import logoEbisaUrl from '../../assets/LOGO_EBISA_ENGENHARIA.png'
-import { isPLSg, type CalcDFResult } from './dfUtils'
+import { isPLSg, fmtMoeda as fmtPDF, periodoLabel, type CalcDFResult } from './dfUtils'
+import type { DFParams } from './dfData'
 
-const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
-export interface DFParams {
-  empresa: { id: number; abreviacao: string; razao_social: string }
-  vigencia: { id: number; ano_vigencia: number; plano_contas_id: number }
-  periodo2: { balanceteId: number; mes: number; ano: number }
-  periodo1: { balanceteId: number; mes: number; ano: number } | null
-}
-
-function fmtPDF(v: number): string {
-  const abs = Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  return v < 0 ? `(${abs})` : abs
-}
-
-function periodoLabel(p: { mes: number; ano: number }): string {
-  return `${MESES[p.mes - 1]}/${p.ano}`
-}
+export type { DFParams }
 
 async function loadBase64(url: string): Promise<string> {
   const resp = await fetch(url)
@@ -59,7 +44,10 @@ async function addHeader(doc: jsPDF, params: DFParams, title: string): Promise<n
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(80, 80, 80)
-  doc.text(`Vigência: ${params.vigencia.ano_vigencia}`, margin, y)
+  const vigenciaText = params.periodo1 && params.periodo1.anoVigencia !== params.periodo2.anoVigencia
+    ? `Vigências: ${params.periodo1.anoVigencia} / ${params.periodo2.anoVigencia}`
+    : `Vigência: ${params.periodo2.anoVigencia}`
+  doc.text(vigenciaText, margin, y)
   y += 5
 
   doc.setFontSize(13)
@@ -151,7 +139,7 @@ export async function gerarDRE(params: DFParams, df1: CalcDFResult, df2?: CalcDF
     columnStyles: colStyles,
   })
 
-  doc.save(`DRE_${params.empresa.abreviacao}_${params.vigencia.ano_vigencia}.pdf`)
+  doc.save(`DRE_${params.empresa.abreviacao}_${params.periodo2.anoVigencia}.pdf`)
 }
 
 export async function gerarBP(params: DFParams, df1: CalcDFResult, df2?: CalcDFResult): Promise<void> {
@@ -268,5 +256,5 @@ export async function gerarBP(params: DFParams, df1: CalcDFResult, df2?: CalcDFR
     columnStyles: colStyles,
   })
 
-  doc.save(`BP_${params.empresa.abreviacao}_${params.vigencia.ano_vigencia}.pdf`)
+  doc.save(`BP_${params.empresa.abreviacao}_${params.periodo2.anoVigencia}.pdf`)
 }

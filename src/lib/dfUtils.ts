@@ -29,8 +29,10 @@ export interface PlanoItem {
   reduzido: number
   id_class_bp_dre: number | null
   id_class_subgrupo: number | null
+  id_class_nota_explicativa: number | null
   class_bp_dre: { id: number; desc_bp_dre: string } | null
   class_subgrupo: { id: number; sigla_subgrupo: string; desc_subgrupo: string | null } | null
+  class_nota_explicativa: { id: number; desc_ne: string } | null
 }
 
 export interface GrupoVal {
@@ -188,4 +190,95 @@ export function calcularDF(
   totalPassivoEPL += totalResultado
 
   return { gruposResultado, gruposBP, totalResultado, totalAtivo, totalPassivoEPL }
+}
+
+// ── Notas explicativas ──────────────────────────────────────────────────────
+
+export interface NotaQuadroLinha {
+  idClassNotaExplicativa: number
+  desc_ne: string
+  saldoFinal: number
+  saldoInicial?: number
+}
+
+export interface NotaQuadro {
+  subgrupo: SubgrupoVal
+  linhas: NotaQuadroLinha[]
+  subtotalFinal: number
+  subtotalInicial?: number
+}
+
+function somarPorSubgrupoNota(
+  classNotaExplicativaIds: Set<number>,
+  planoItens: PlanoItem[],
+  bItems: { conta: string; saldo_atual: number }[]
+): Map<string, number> {
+  const bMap = new Map(bItems.map(b => [b.conta, b.saldo_atual]))
+  const saldoMap = new Map<string, number>()
+  for (const pi of planoItens) {
+    if (pi.id_class_nota_explicativa == null || !classNotaExplicativaIds.has(pi.id_class_nota_explicativa)) continue
+    if (pi.id_class_subgrupo == null) continue
+    const key = `${pi.id_class_subgrupo}|${pi.id_class_nota_explicativa}`
+    saldoMap.set(key, (saldoMap.get(key) ?? 0) + (bMap.get(pi.conta) ?? 0))
+  }
+  return saldoMap
+}
+
+/**
+ * Monta os quadros de uma nota explicativa: 1 quadro por subgrupo (AC/ANC/PC/PNC/...)
+ * em que algum item vinculado tenha saldo no período final ou inicial. Cada linha do
+ * quadro corresponde a um item de `class_nota_explicativa` vinculado à nota.
+ *
+ * `allowedSubgrupoIds`, quando informado, restringe os quadros aos subgrupos
+ * vinculados ao `class_bp_dre` da nota (via `class_bp_dre_subgrupo`) — necessário
+ * porque um mesmo `class_nota_explicativa` pode aparecer em subgrupos de mais de
+ * um item de BP/DRE.
+ */
+export function computeNotaQuadros(
+  classNotaExplicativaIds: number[],
+  planoItensFinal: PlanoItem[],
+  bItemsFinal: { conta: string; saldo_atual: number }[],
+  planoItensInicial?: PlanoItem[],
+  bItemsInicial?: { conta: string; saldo_atual: number }[],
+  allowedSubgrupoIds?: Set<number>
+): NotaQuadro[] {
+  const idsSet = new Set(classNotaExplicativaIds)
+  const saldoFinal = somarPorSubgrupoNota(idsSet, planoItensFinal, bItemsFinal)
+  const hasInicial = !!(planoItensInicial && bItemsInicial)
+  const saldoInicial = hasInicial
+    ? somarPorSubgrupoNota(idsSet, planoItensInicial!, bItemsInicial!)
+    : new Map<string, number>()
+
+  // pares (subgrupo, nota) que existem estruturalmente no plano de contas (qualquer período)
+  const sgInfo = new Map<number, SubgrupoVal>()
+  const neInfo = new Map<number, string>()
+  const pairsBySg = new Map<number, Set<number>>()
+
+  for (const pi of [...planoItensFinal, ...(planoItensInicial ?? [])]) {
+    if (pi.id_class_nota_explicativa == null || !idsSet.has(pi.id_class_nota_explicativa)) continue
+    if (pi.id_class_subgrupo == null || !pi.class_subgrupo) continue
+    if (allowedSubgrupoIds && !allowedSubgrupoIds.has(pi.id_class_subgrupo)) continue
+    sgInfo.set(pi.id_class_subgrupo, pi.class_subgrupo)
+    if (pi.class_nota_explicativa) neInfo.set(pi.id_class_nota_explicativa, pi.class_nota_explicativa.desc_ne)
+    if (!pairsBySg.has(pi.id_class_subgrupo)) pairsBySg.set(pi.id_class_subgrupo, new Set())
+    pairsBySg.get(pi.id_class_subgrupo)!.add(pi.id_class_nota_explicativa)
+  }
+
+  const quadros: NotaQuadro[] = []
+  for (const [sgId, neIds] of pairsBySg) {
+    const linhas: NotaQuadroLinha[] = Array.from(neIds).map(neId => ({
+      idClassNotaExplicativa: neId,
+      desc_ne: neInfo.get(neId) ?? '',
+      saldoFinal: saldoFinal.get(`${sgId}|${neId}`) ?? 0,
+      saldoInicial: hasInicial ? (saldoInicial.get(`${sgId}|${neId}`) ?? 0) : undefined,
+    }))
+    const subtotalFinal = linhas.reduce((acc, l) => acc + l.saldoFinal, 0)
+    const subtotalInicial = hasInicial ? linhas.reduce((acc, l) => acc + (l.saldoInicial ?? 0), 0) : undefined
+    const temSaldo = subtotalFinal !== 0 || (subtotalInicial ?? 0) !== 0
+    if (!temSaldo) continue
+    quadros.push({ subgrupo: sgInfo.get(sgId)!, linhas, subtotalFinal, subtotalInicial })
+  }
+
+  quadros.sort((a, b) => a.subgrupo.sigla_subgrupo.localeCompare(b.subgrupo.sigla_subgrupo))
+  return quadros
 }

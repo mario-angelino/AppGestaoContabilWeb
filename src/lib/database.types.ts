@@ -204,6 +204,102 @@ export type Database = {
         }
         Relationships: []
       }
+      nota_explicativa_bp_dre: {
+        Row: {
+          id: number
+          id_class_bp_dre: number | null
+          id_empresa: number
+          ano: number
+          mes: number
+          tipo: string
+          titulo: string | null
+          numero_nota: number | null
+          texto_antes: string | null
+          texto_depois: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          id_class_bp_dre?: number | null
+          id_empresa: number
+          ano: number
+          mes?: number
+          tipo?: string
+          titulo?: string | null
+          numero_nota?: number | null
+          texto_antes?: string | null
+          texto_depois?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          id_class_bp_dre?: number | null
+          id_empresa?: number
+          ano?: number
+          mes?: number
+          tipo?: string
+          titulo?: string | null
+          numero_nota?: number | null
+          texto_antes?: string | null
+          texto_depois?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nota_explicativa_bp_dre_id_class_bp_dre_fkey"
+            columns: ["id_class_bp_dre"]
+            isOneToOne: false
+            referencedRelation: "class_bp_dre"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nota_explicativa_bp_dre_id_empresa_fkey"
+            columns: ["id_empresa"]
+            isOneToOne: false
+            referencedRelation: "empresa"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nota_explicativa_bp_dre_itens: {
+        Row: {
+          id: number
+          id_nota_explicativa_bp_dre: number
+          id_class_nota_explicativa: number
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          id_nota_explicativa_bp_dre: number
+          id_class_nota_explicativa: number
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          id_nota_explicativa_bp_dre?: number
+          id_class_nota_explicativa?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nota_explicativa_bp_dre_itens_id_nota_explicativa_bp_dre_fkey"
+            columns: ["id_nota_explicativa_bp_dre"]
+            isOneToOne: false
+            referencedRelation: "nota_explicativa_bp_dre"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nota_explicativa_bp_dre_itens_id_class_nota_explicativa_fkey"
+            columns: ["id_class_nota_explicativa"]
+            isOneToOne: false
+            referencedRelation: "class_nota_explicativa"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_papel_trabalho: {
         Row: {
           created_at: string

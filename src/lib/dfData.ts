@@ -46,7 +46,7 @@ export async function fetchPlanoItens(planoContasId: number): Promise<PlanoItem[
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from('plano_contas_itens')
-      .select('conta, reduzido, id_class_bp_dre, id_class_subgrupo, class_bp_dre(id, desc_bp_dre), class_subgrupo(id, sigla_subgrupo, desc_subgrupo)')
+      .select('conta, reduzido, id_class_bp_dre, id_class_subgrupo, id_class_nota_explicativa, class_bp_dre(id, desc_bp_dre), class_subgrupo(id, sigla_subgrupo, desc_subgrupo), class_nota_explicativa(id, desc_ne)')
       .eq('id_plano_contas', planoContasId)
       .not('id_class_bp_dre', 'is', null)
       .range(from, from + PAGE - 1)

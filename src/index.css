@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+/* Tabelas no editor de texto rico (Tiptap) */
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+.ProseMirror table td,
+.ProseMirror table th {
+  border: 1px solid #d1d5db;
+  padding: 4px 8px;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+}
+.ProseMirror table th {
+  font-weight: 600;
+  background-color: #f9fafb;
+}
+.ProseMirror table .selectedCell {
+  background-color: rgba(37, 99, 235, 0.1);
+}
+.ProseMirror table .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: #2563eb;
+  pointer-events: none;
+}
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}

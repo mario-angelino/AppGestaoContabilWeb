@@ -1,0 +1,236 @@
+import { supabase } from './supabase'
+
+export type TipoNota = 'quadro' | 'texto'
+
+export interface NotaExplicativaBpDre {
+  id: number
+  id_class_bp_dre: number | null
+  id_empresa: number
+  ano: number
+  mes: number
+  tipo: TipoNota
+  titulo: string | null
+  numero_nota: number | null
+  texto_antes: string | null
+  texto_depois: string | null
+  class_bp_dre: { id: number; desc_bp_dre: string } | null
+}
+
+export interface NotaExplicativaBpDreItem {
+  id: number
+  id_nota_explicativa_bp_dre: number
+  id_class_nota_explicativa: number
+  class_nota_explicativa: { id: number; desc_ne: string } | null
+}
+
+export interface ClassNotaExplicativaOpt {
+  id: number
+  desc_ne: string
+}
+
+export interface ClassBpDreOpt {
+  id: number
+  desc_bp_dre: string
+}
+
+export interface PeriodoOpt {
+  ano: number
+  mes: number
+}
+
+const NOTA_SELECT = 'id, id_class_bp_dre, id_empresa, ano, mes, tipo, titulo, numero_nota, texto_antes, texto_depois, class_bp_dre(id, desc_bp_dre)'
+
+/** Capas existentes para uma empresa + período (ano/mês de referência). */
+export async function fetchNotasExplicativasBpDre(idEmpresa: number, ano: number, mes: number): Promise<NotaExplicativaBpDre[]> {
+  const { data, error } = await supabase
+    .from('nota_explicativa_bp_dre')
+    .select(NOTA_SELECT)
+    .eq('id_empresa', idEmpresa)
+    .eq('ano', ano)
+    .eq('mes', mes)
+    .order('numero_nota', { ascending: true, nullsFirst: false })
+    .order('id', { ascending: true })
+  if (error) throw error
+  return data as unknown as NotaExplicativaBpDre[]
+}
+
+/** Itens (class_nota_explicativa) vinculados a uma ou mais capas. */
+export async function fetchNotaItens(idsNota: number[]): Promise<NotaExplicativaBpDreItem[]> {
+  if (idsNota.length === 0) return []
+  const { data, error } = await supabase
+    .from('nota_explicativa_bp_dre_itens')
+    .select('id, id_nota_explicativa_bp_dre, id_class_nota_explicativa, class_nota_explicativa(id, desc_ne)')
+    .in('id_nota_explicativa_bp_dre', idsNota)
+  if (error) throw error
+  return data as unknown as NotaExplicativaBpDreItem[]
+}
+
+/** Salva número, título (notas de texto), texto_antes e texto_depois de uma capa já existente. */
+export async function saveNotaCampos(
+  idNota: number,
+  numeroNota: number | null,
+  textoAntes: string,
+  textoDepois: string,
+  titulo?: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('nota_explicativa_bp_dre')
+    .update({
+      numero_nota: numeroNota,
+      texto_antes: textoAntes,
+      texto_depois: textoDepois,
+      ...(titulo !== undefined ? { titulo } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', idNota)
+  if (error) throw error
+}
+
+/** Cria (ou retorna) a capa de quadro para um class_bp_dre + empresa + período. */
+export async function upsertNotaExplicativaBpDre(idClassBpDre: number, idEmpresa: number, ano: number, mes: number): Promise<NotaExplicativaBpDre> {
+  const { data, error } = await supabase
+    .from('nota_explicativa_bp_dre')
+    .upsert(
+      { id_class_bp_dre: idClassBpDre, id_empresa: idEmpresa, ano, mes, tipo: 'quadro' },
+      { onConflict: 'id_class_bp_dre,id_empresa,ano,mes' }
+    )
+    .select(NOTA_SELECT)
+    .single()
+  if (error) throw error
+  return data as unknown as NotaExplicativaBpDre
+}
+
+/** Cria uma capa de texto livre (sem class_bp_dre) para empresa + período. */
+export async function criarNotaTexto(idEmpresa: number, ano: number, mes: number, titulo: string): Promise<NotaExplicativaBpDre> {
+  const { data, error } = await supabase
+    .from('nota_explicativa_bp_dre')
+    .insert({ id_empresa: idEmpresa, ano, mes, tipo: 'texto', titulo })
+    .select(NOTA_SELECT)
+    .single()
+  if (error) throw error
+  return data as unknown as NotaExplicativaBpDre
+}
+
+/** Substitui o conjunto de itens (class_nota_explicativa) vinculados a uma capa. */
+export async function setNotaItens(idNota: number, idsClassNotaExplicativa: number[]): Promise<void> {
+  const { error: delError } = await supabase
+    .from('nota_explicativa_bp_dre_itens')
+    .delete()
+    .eq('id_nota_explicativa_bp_dre', idNota)
+  if (delError) throw delError
+
+  if (idsClassNotaExplicativa.length === 0) return
+
+  const rows = idsClassNotaExplicativa.map(idClassNotaExplicativa => ({
+    id_nota_explicativa_bp_dre: idNota,
+    id_class_nota_explicativa: idClassNotaExplicativa,
+  }))
+  const { error: insError } = await supabase
+    .from('nota_explicativa_bp_dre_itens')
+    .insert(rows)
+  if (insError) throw insError
+}
+
+/** Lista todos os class_nota_explicativa (para o checklist de vínculo). */
+export async function fetchClassNotasExplicativas(): Promise<ClassNotaExplicativaOpt[]> {
+  const { data, error } = await supabase
+    .from('class_nota_explicativa')
+    .select('id, desc_ne')
+    .order('desc_ne')
+  if (error) throw error
+  return data as ClassNotaExplicativaOpt[]
+}
+
+/** Lista todos os class_bp_dre (para criação de novas capas de quadro). */
+export async function fetchClassBpDres(): Promise<ClassBpDreOpt[]> {
+  const { data, error } = await supabase
+    .from('class_bp_dre')
+    .select('id, desc_bp_dre')
+    .order('desc_bp_dre')
+  if (error) throw error
+  return data as ClassBpDreOpt[]
+}
+
+/** Lista os períodos (ano/mês) com balancete importado para uma empresa — usado para "copiar para outro período". */
+export async function fetchPeriodosDisponiveis(idEmpresa: number): Promise<PeriodoOpt[]> {
+  const { data, error } = await supabase
+    .from('balancete')
+    .select('mes, ano, plano_contas_vigencia!inner(empresa_id)')
+    .eq('plano_contas_vigencia.empresa_id', idEmpresa)
+    .order('ano', { ascending: false })
+    .order('mes', { ascending: false })
+  if (error) throw error
+
+  const seen = new Set<string>()
+  const out: PeriodoOpt[] = []
+  for (const r of data as unknown as { mes: number; ano: number }[]) {
+    const key = `${r.ano}-${r.mes}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ ano: r.ano, mes: r.mes })
+  }
+  return out
+}
+
+export type ClonarNotaResultado = { ok: true; novaId: number } | { ok: false; reason: 'conflict' }
+
+/**
+ * Clona uma capa (com texto e itens vinculados) para outro período (ano/mês).
+ * Para notas do tipo `quadro`, retorna `{ ok: false, reason: 'conflict' }` se já
+ * existir uma capa do mesmo `class_bp_dre` no período destino.
+ */
+export async function clonarNotaParaPeriodo(idNota: number, anoDestino: number, mesDestino: number): Promise<ClonarNotaResultado> {
+  const { data: origem, error: e1 } = await supabase
+    .from('nota_explicativa_bp_dre')
+    .select('id_class_bp_dre, id_empresa, tipo, titulo, numero_nota, texto_antes, texto_depois')
+    .eq('id', idNota)
+    .single()
+  if (e1) throw e1
+
+  if (origem.tipo === 'quadro') {
+    const { data: existente, error: e2 } = await supabase
+      .from('nota_explicativa_bp_dre')
+      .select('id')
+      .eq('id_class_bp_dre', origem.id_class_bp_dre as number)
+      .eq('id_empresa', origem.id_empresa)
+      .eq('ano', anoDestino)
+      .eq('mes', mesDestino)
+      .maybeSingle()
+    if (e2) throw e2
+    if (existente) return { ok: false, reason: 'conflict' }
+  }
+
+  const { data: nova, error: e3 } = await supabase
+    .from('nota_explicativa_bp_dre')
+    .insert({
+      id_class_bp_dre: origem.id_class_bp_dre,
+      id_empresa: origem.id_empresa,
+      ano: anoDestino,
+      mes: mesDestino,
+      tipo: origem.tipo,
+      titulo: origem.titulo,
+      numero_nota: origem.numero_nota,
+      texto_antes: origem.texto_antes,
+      texto_depois: origem.texto_depois,
+    })
+    .select('id')
+    .single()
+  if (e3) throw e3
+
+  const { data: itens, error: e4 } = await supabase
+    .from('nota_explicativa_bp_dre_itens')
+    .select('id_class_nota_explicativa')
+    .eq('id_nota_explicativa_bp_dre', idNota)
+  if (e4) throw e4
+
+  if (itens.length > 0) {
+    const rows = itens.map(i => ({
+      id_nota_explicativa_bp_dre: nova.id,
+      id_class_nota_explicativa: i.id_class_nota_explicativa,
+    }))
+    const { error: e5 } = await supabase.from('nota_explicativa_bp_dre_itens').insert(rows)
+    if (e5) throw e5
+  }
+
+  return { ok: true, novaId: nova.id }
+}

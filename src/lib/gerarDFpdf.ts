@@ -16,7 +16,7 @@ async function loadBase64(url: string): Promise<string> {
   })
 }
 
-async function addHeader(doc: jsPDF, params: DFParams, title: string): Promise<number> {
+export async function addHeader(doc: jsPDF, params: DFParams, title: string): Promise<number> {
   const isEbisa = params.empresa.abreviacao.toLowerCase().includes('ebisa')
   const pageW = doc.internal.pageSize.getWidth()
   const margin = 15

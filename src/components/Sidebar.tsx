@@ -81,11 +81,7 @@ export default function Sidebar(): JSX.Element {
 
         <SectionLabel label="DFs" />
         <NavItem to="/dfs/demonstracoes" icon={<TrendingUp size={16} />} label="Demonstrações" end />
-        <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 cursor-default opacity-60">
-          <span className="w-4 h-4 flex-shrink-0"><StickyNote size={16} /></span>
-          Notas
-          <span className="ml-auto text-[10px] uppercase tracking-wide bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded">em breve</span>
-        </div>
+        <NavItem to="/dfs/notas-explicativas" icon={<StickyNote size={16} />} label="Notas Explicativas" end />
 
         <SectionLabel label="Auxiliar" />
         <NavItem to="/vigencias" icon={<Calendar size={16} />} label="Vigências" end />

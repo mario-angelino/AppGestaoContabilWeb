@@ -15,7 +15,7 @@ import logoEbisaUrl from '../../assets/LOGO_EBISA_ENGENHARIA.png'
 import { isPLSg, fmtMoeda, periodoLabel, type CalcDFResult } from './dfUtils'
 import type { DFParams } from './dfData'
 
-function downloadBlob(blob: Blob, filename: string): void {
+export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -31,7 +31,7 @@ async function loadArrayBuffer(url: string): Promise<ArrayBuffer> {
   return resp.arrayBuffer()
 }
 
-async function buildHeader(params: DFParams, title: string): Promise<Paragraph[]> {
+export async function buildHeader(params: DFParams, title: string): Promise<Paragraph[]> {
   const isEbisa = params.empresa.abreviacao.toLowerCase().includes('ebisa')
   const dataGeracao = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
   const vigenciaText = params.periodo1 && params.periodo1.anoVigencia !== params.periodo2.anoVigencia
@@ -71,7 +71,7 @@ async function buildHeader(params: DFParams, title: string): Promise<Paragraph[]
   return paragraphs
 }
 
-function cell(text: string, opts: { bold?: boolean; align?: typeof AlignmentType.RIGHT; shading?: string; italics?: boolean; color?: string; colSpan?: number } = {}): TableCell {
+export function cell(text: string, opts: { bold?: boolean; align?: typeof AlignmentType.RIGHT; shading?: string; italics?: boolean; color?: string; colSpan?: number } = {}): TableCell {
   return new TableCell({
     columnSpan: opts.colSpan,
     shading: opts.shading ? { type: ShadingType.SOLID, color: opts.shading, fill: opts.shading } : undefined,

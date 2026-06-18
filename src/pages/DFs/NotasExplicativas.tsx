@@ -1,14 +1,12 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { StickyNote, Search, Save, Plus, Pencil, X, Copy, Building2, Trash2, Printer } from 'lucide-react'
+import { StickyNote, Search, Save, Plus, Pencil, X, Copy, Printer } from 'lucide-react'
 import { computeNotaQuadros, MESES, type PlanoItem, type BpDreSubgrupoLink } from '../../lib/dfUtils'
 import { fetchBalanceteItens, fetchPlanoItens, fetchLinks, type DFParams, type BalanceteItem } from '../../lib/dfData'
 import {
   fetchNotasExplicativasBpDre, fetchNotaItens, fetchClassNotasExplicativas, fetchClassBpDres,
-  saveNotaCampos, upsertNotaExplicativaBpDre, criarNotaTexto, criarNotaEspecial, setNotaItens,
-  fetchPeriodosDisponiveis, clonarNotaParaPeriodo, fetchEmpresasAtivas, excluirNotaExplicativaBpDre,
-  TIPOS_ESPECIAIS,
-  type TipoNotaEspecial,
+  saveNotaCampos, upsertNotaExplicativaBpDre, criarNotaTexto, setNotaItens,
+  fetchPeriodosDisponiveis, clonarNotaParaPeriodo,
   type NotaExplicativaBpDre, type NotaExplicativaBpDreItem, type ClassNotaExplicativaOpt, type ClassBpDreOpt,
 } from '../../lib/notasExplicativasData'
 import { type NotaParaImpressao } from '../../lib/gerarNotasExport'
@@ -159,16 +157,10 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
   const [criandoTexto, setCriandoTexto] = useState(false)
   const [mostrarCriarTexto, setMostrarCriarTexto] = useState(false)
 
-  const [mostrarCriarEspecial, setMostrarCriarEspecial] = useState(false)
-  const [tipoEspecial, setTipoEspecial] = useState<TipoNotaEspecial | ''>('')
-  const [criandoEspecial, setCriandoEspecial] = useState(false)
-
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [imprimindo, setImprimindo] = useState(false)
 
   const bpDresDisponiveis = classBpDres.filter(c => !notas.some(n => n.id_class_bp_dre === c.id))
-  const tiposEspeciaisDisponiveis = (Object.entries(TIPOS_ESPECIAIS) as [TipoNotaEspecial, string][])
-    .filter(([tipo]) => !notas.some(n => n.tipo === tipo))
 
   const itensPorNota = new Map<number, number[]>()
   for (const item of itens) {
@@ -186,7 +178,7 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
     return {
       id: nota.id,
       numeroNota: nota.numero_nota,
-      titulo: nota.tipo === 'quadro' ? (nota.class_bp_dre?.desc_bp_dre ?? `Nota #${nota.id}`) : (nota.titulo ?? `Nota #${nota.id}`),
+      titulo: nota.tipo === 'texto' ? (nota.titulo ?? `Nota #${nota.id}`) : (nota.class_bp_dre?.desc_bp_dre ?? `Nota #${nota.id}`),
       tipo: nota.tipo,
       textoAntes: nota.texto_antes ?? '',
       textoDepois: nota.texto_depois ?? '',
@@ -219,20 +211,6 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
       setEditandoId(nova.id)
     } finally {
       setCriandoTexto(false)
-    }
-  }
-
-  async function handleCriarEspecial() {
-    if (!tipoEspecial) return
-    setCriandoEspecial(true)
-    try {
-      const nova = await criarNotaEspecial(tipoEspecial, idEmpresa, ano, mes)
-      setTipoEspecial('')
-      setMostrarCriarEspecial(false)
-      await queryClient.invalidateQueries({ queryKey: ['notas_explicativas', idEmpresa, ano, mes] })
-      setEditandoId(nova.id)
-    } finally {
-      setCriandoEspecial(false)
     }
   }
 
@@ -274,7 +252,7 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
               {nota.numero_nota != null ? `Nº ${nota.numero_nota}` : '—'}
             </span>
             <span className="flex-1 text-sm text-gray-900">
-              {nota.tipo === 'quadro' ? (nota.class_bp_dre?.desc_bp_dre ?? `Nota #${nota.id}`) : (nota.titulo ?? `Nota #${nota.id}`)}
+              {nota.tipo === 'texto' ? (nota.titulo ?? `Nota #${nota.id}`) : (nota.class_bp_dre?.desc_bp_dre ?? `Nota #${nota.id}`)}
             </span>
             <button
               onClick={() => setEditandoId(nota.id)}
@@ -284,14 +262,6 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
               Editar
             </button>
             <CopiarNotaButton nota={nota} idEmpresa={idEmpresa} onDone={invalidate} />
-            <CopiarParaEmpresaButton nota={nota} idEmpresaAtual={idEmpresa} onDone={invalidate} />
-            <ExcluirNotaButton
-              nota={nota}
-              onDone={() => {
-                if (editandoId === nota.id) setEditandoId(null)
-                invalidate()
-              }}
-            />
           </div>
         ))}
 
@@ -375,45 +345,6 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
             <Plus size={16} />
             Nota de texto
           </button>
-        )}
-
-        {tiposEspeciaisDisponiveis.length > 0 && (
-          mostrarCriarEspecial ? (
-            <div className="border border-dashed border-gray-300 rounded-xl p-4 flex items-center gap-3 flex-1 min-w-[280px]">
-              <select
-                value={tipoEspecial}
-                onChange={e => setTipoEspecial(e.target.value as TipoNotaEspecial | '')}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">Selecione o tipo de nota…</option>
-                {tiposEspeciaisDisponiveis.map(([tipo, label]) => (
-                  <option key={tipo} value={tipo}>{label}</option>
-                ))}
-              </select>
-              <button
-                onClick={handleCriarEspecial}
-                disabled={!tipoEspecial || criandoEspecial}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <Plus size={16} />
-                Adicionar
-              </button>
-              <button
-                onClick={() => { setMostrarCriarEspecial(false); setTipoEspecial('') }}
-                className="text-sm text-gray-500 hover:text-gray-700 px-2 py-2"
-              >
-                Cancelar
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setMostrarCriarEspecial(true)}
-              className="flex items-center gap-2 border border-dashed border-gray-300 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 hover:border-gray-400 transition-colors"
-            >
-              <Plus size={16} />
-              Nota especial
-            </button>
-          )
         )}
       </div>
 
@@ -519,147 +450,6 @@ function CopiarNotaButton({ nota, idEmpresa, onDone }: { nota: NotaExplicativaBp
   )
 }
 
-function CopiarParaEmpresaButton({ nota, idEmpresaAtual, onDone }: { nota: NotaExplicativaBpDre; idEmpresaAtual: number; onDone: () => void }) {
-  const [aberto, setAberto] = useState(false)
-  const [empresaSel, setEmpresaSel] = useState<number | ''>('')
-  const [periodoSel, setPeriodoSel] = useState('')
-  const [copiando, setCopiando] = useState(false)
-  const [erro, setErro] = useState<string | null>(null)
-
-  const { data: empresas = [] } = useQuery({
-    queryKey: ['empresas_ativas'],
-    queryFn: fetchEmpresasAtivas,
-    enabled: aberto,
-  })
-
-  const { data: periodos = [] } = useQuery({
-    queryKey: ['periodos_disponiveis', empresaSel],
-    queryFn: () => fetchPeriodosDisponiveis(Number(empresaSel)),
-    enabled: aberto && empresaSel !== '',
-  })
-
-  const empresasDisponiveis = empresas.filter(e => e.id !== idEmpresaAtual)
-
-  async function handleCopiar() {
-    if (!empresaSel || !periodoSel) return
-    const [anoStr, mesStr] = periodoSel.split('-')
-    setCopiando(true)
-    setErro(null)
-    try {
-      const res = await clonarNotaParaPeriodo(nota.id, Number(anoStr), Number(mesStr), Number(empresaSel))
-      if (!res.ok) {
-        setErro('Já existe uma nota para este item no período/empresa selecionado.')
-        return
-      }
-      setAberto(false)
-      setEmpresaSel('')
-      setPeriodoSel('')
-      onDone()
-    } finally {
-      setCopiando(false)
-    }
-  }
-
-  if (!aberto) {
-    return (
-      <button
-        onClick={() => setAberto(true)}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 font-medium px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors"
-      >
-        <Building2 size={14} />
-        Copiar para empresa
-      </button>
-    )
-  }
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <select
-        value={empresaSel}
-        onChange={e => { setEmpresaSel(e.target.value === '' ? '' : Number(e.target.value)); setPeriodoSel(''); setErro(null) }}
-        className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-      >
-        <option value="">Empresa destino…</option>
-        {empresasDisponiveis.map(e => (
-          <option key={e.id} value={e.id}>{e.abreviacao} — {e.razao_social}</option>
-        ))}
-      </select>
-      <select
-        value={periodoSel}
-        onChange={e => { setPeriodoSel(e.target.value); setErro(null) }}
-        disabled={empresaSel === ''}
-        className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-400"
-      >
-        <option value="">Período destino…</option>
-        {periodos.map(p => (
-          <option key={`${p.ano}-${p.mes}`} value={`${p.ano}-${p.mes}`}>{MESES[p.mes - 1]}/{p.ano}</option>
-        ))}
-      </select>
-      <button
-        onClick={handleCopiar}
-        disabled={!empresaSel || !periodoSel || copiando}
-        className="text-sm text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors"
-      >
-        OK
-      </button>
-      <button
-        onClick={() => { setAberto(false); setErro(null); setEmpresaSel(''); setPeriodoSel('') }}
-        className="text-sm text-gray-500 hover:text-gray-700 px-2 py-1"
-      >
-        Cancelar
-      </button>
-      {erro && <span className="text-xs text-red-600 w-full">{erro}</span>}
-    </div>
-  )
-}
-
-function ExcluirNotaButton({ nota, onDone }: { nota: NotaExplicativaBpDre; onDone: () => void }) {
-  const [confirmando, setConfirmando] = useState(false)
-  const [excluindo, setExcluindo] = useState(false)
-
-  async function handleExcluir() {
-    setExcluindo(true)
-    try {
-      await excluirNotaExplicativaBpDre(nota.id)
-      onDone()
-    } finally {
-      setExcluindo(false)
-      setConfirmando(false)
-    }
-  }
-
-  if (!confirmando) {
-    return (
-      <button
-        onClick={() => setConfirmando(true)}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
-      >
-        <Trash2 size={14} />
-        Excluir
-      </button>
-    )
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-600">Excluir esta nota?</span>
-      <button
-        onClick={handleExcluir}
-        disabled={excluindo}
-        className="text-sm text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
-      >
-        Confirmar
-      </button>
-      <button
-        onClick={() => setConfirmando(false)}
-        className="text-sm text-gray-500 hover:text-gray-700 px-2 py-1"
-      >
-        Cancelar
-      </button>
-    </div>
-  )
-}
-
 interface NotaCardProps {
   nota: NotaExplicativaBpDre
   itensVinculados: NotaExplicativaBpDreItem[]
@@ -678,8 +468,6 @@ function NotaCard({
   nota, itensVinculados, classNotas, links, planoItensFinal, bItemsFinal, planoItensInicial, bItemsInicial, params, onSaved, onClose,
 }: NotaCardProps) {
   const isTexto = nota.tipo === 'texto'
-  const isQuadro = nota.tipo === 'quadro'
-  const isEspecial = !isTexto && !isQuadro
   const [selecionados, setSelecionados] = useState<Set<number>>(
     () => new Set(itensVinculados.map(i => i.id_class_nota_explicativa))
   )
@@ -722,14 +510,14 @@ function NotaCard({
     links.filter(l => l.id_class_bp_dre === nota.id_class_bp_dre).map(l => l.id_class_subgrupo)
   )
 
-  const quadros = isQuadro ? computeNotaQuadros(
+  const quadros = isTexto ? [] : computeNotaQuadros(
     Array.from(selecionados),
     planoItensFinal,
     bItemsFinal,
     planoItensInicial,
     bItemsInicial,
     allowedSubgrupoIds,
-  ) : []
+  )
 
   return (
     <div className="border border-gray-200 rounded-2xl p-6 space-y-4">
@@ -742,10 +530,6 @@ function NotaCard({
             placeholder="Título da nota"
             className="flex-1 text-base font-semibold text-gray-900 border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-        ) : isEspecial ? (
-          <h3 className="text-base font-semibold text-gray-900 flex-1">
-            {TIPOS_ESPECIAIS[nota.tipo as TipoNotaEspecial]}
-          </h3>
         ) : (
           <h3 className="text-base font-semibold text-gray-900 flex-1">
             {nota.class_bp_dre?.desc_bp_dre ?? `Nota #${nota.id}`}
@@ -770,15 +554,7 @@ function NotaCard({
         </button>
       </div>
 
-      {isEspecial ? (
-        <>
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Layout específico deste tipo de nota ainda não implementado. Use os campos de texto abaixo para inserir o conteúdo temporariamente.
-          </div>
-          <RichTextField label="Texto da nota" value={textoAntes} onChange={v => { setTextoAntes(v); setDirty(true) }} />
-          <RichTextField label="Texto complementar" value={textoDepois} onChange={v => { setTextoDepois(v); setDirty(true) }} />
-        </>
-      ) : isTexto ? (
+      {isTexto ? (
         <RichTextField label="Texto da nota" value={textoAntes} onChange={v => { setTextoAntes(v); setDirty(true) }} />
       ) : (
         <>

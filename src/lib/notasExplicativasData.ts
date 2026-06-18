@@ -1,17 +1,6 @@
 import { supabase } from './supabase'
 
-export const TIPOS_ESPECIAIS = {
-  investimento:         'Investimentos',
-  imobilizado:          'Imobilizado',
-  emprestimos:          'Empréstimos',
-  patrimonio_liquido:   'Patrimônio Líquido',
-  receita_operacional:  'Receita Operacional Líquida',
-  resultado_financeiro: 'Resultado Financeiro',
-  ebitda:               'EBITDA',
-} as const
-
-export type TipoNotaEspecial = keyof typeof TIPOS_ESPECIAIS
-export type TipoNota = 'quadro' | 'texto' | TipoNotaEspecial
+export type TipoNota = 'quadro' | 'texto'
 
 export interface NotaExplicativaBpDre {
   id: number
@@ -47,12 +36,6 @@ export interface ClassBpDreOpt {
 export interface PeriodoOpt {
   ano: number
   mes: number
-}
-
-export interface EmpresaOpt {
-  id: number
-  abreviacao: string
-  razao_social: string
 }
 
 const NOTA_SELECT = 'id, id_class_bp_dre, id_empresa, ano, mes, tipo, titulo, numero_nota, texto_antes, texto_depois, class_bp_dre(id, desc_bp_dre)'
@@ -103,43 +86,18 @@ export async function saveNotaCampos(
   if (error) throw error
 }
 
-/**
- * Cria (ou retorna) a capa de quadro para um class_bp_dre + empresa + período.
- *
- * Não usa `.upsert(..., { onConflict })` porque o índice único correspondente
- * (`nota_explicativa_bp_dre_quadro_periodo_key`) é parcial (`where tipo = 'quadro'`),
- * e o Postgres não casa um `ON CONFLICT (colunas)` simples com índices únicos parciais —
- * o upsert falharia com "no unique or exclusion constraint matching the ON CONFLICT".
- */
+/** Cria (ou retorna) a capa de quadro para um class_bp_dre + empresa + período. */
 export async function upsertNotaExplicativaBpDre(idClassBpDre: number, idEmpresa: number, ano: number, mes: number): Promise<NotaExplicativaBpDre> {
-  const { data: existente, error: e1 } = await supabase
-    .from('nota_explicativa_bp_dre')
-    .select(NOTA_SELECT)
-    .eq('id_class_bp_dre', idClassBpDre)
-    .eq('id_empresa', idEmpresa)
-    .eq('ano', ano)
-    .eq('mes', mes)
-    .eq('tipo', 'quadro')
-    .maybeSingle()
-  if (e1) throw e1
-  if (existente) return existente as unknown as NotaExplicativaBpDre
-
   const { data, error } = await supabase
     .from('nota_explicativa_bp_dre')
-    .insert({ id_class_bp_dre: idClassBpDre, id_empresa: idEmpresa, ano, mes, tipo: 'quadro' })
+    .upsert(
+      { id_class_bp_dre: idClassBpDre, id_empresa: idEmpresa, ano, mes, tipo: 'quadro' },
+      { onConflict: 'id_class_bp_dre,id_empresa,ano,mes' }
+    )
     .select(NOTA_SELECT)
     .single()
   if (error) throw error
   return data as unknown as NotaExplicativaBpDre
-}
-
-/** Exclui uma capa (e seus itens vinculados, via cascade) por id. */
-export async function excluirNotaExplicativaBpDre(idNota: number): Promise<void> {
-  const { error } = await supabase
-    .from('nota_explicativa_bp_dre')
-    .delete()
-    .eq('id', idNota)
-  if (error) throw error
 }
 
 /** Cria uma capa de texto livre (sem class_bp_dre) para empresa + período. */
@@ -216,35 +174,12 @@ export async function fetchPeriodosDisponiveis(idEmpresa: number): Promise<Perio
 
 export type ClonarNotaResultado = { ok: true; novaId: number } | { ok: false; reason: 'conflict' }
 
-/** Lista as empresas ativas (para "copiar para outra empresa"). */
-export async function fetchEmpresasAtivas(): Promise<EmpresaOpt[]> {
-  const { data, error } = await supabase
-    .from('empresa')
-    .select('id, abreviacao, razao_social')
-    .eq('fl_ativa', true)
-    .order('abreviacao')
-  if (error) throw error
-  return data as EmpresaOpt[]
-}
-
 /**
- * Clona uma capa (com texto e itens vinculados) para outro período (ano/mês) e,
- * opcionalmente, outra empresa (`idEmpresaDestino`; padrão: mesma empresa da origem).
+ * Clona uma capa (com texto e itens vinculados) para outro período (ano/mês).
  * Para notas do tipo `quadro`, retorna `{ ok: false, reason: 'conflict' }` se já
- * existir uma capa do mesmo `class_bp_dre` no destino.
+ * existir uma capa do mesmo `class_bp_dre` no período destino.
  */
-/** Cria uma nota de tipo especial (investimento, imobilizado, etc.) para empresa + período. */
-export async function criarNotaEspecial(tipo: TipoNotaEspecial, idEmpresa: number, ano: number, mes: number): Promise<NotaExplicativaBpDre> {
-  const { data, error } = await supabase
-    .from('nota_explicativa_bp_dre')
-    .insert({ id_empresa: idEmpresa, ano, mes, tipo, titulo: TIPOS_ESPECIAIS[tipo] })
-    .select(NOTA_SELECT)
-    .single()
-  if (error) throw error
-  return data as unknown as NotaExplicativaBpDre
-}
-
-export async function clonarNotaParaPeriodo(idNota: number, anoDestino: number, mesDestino: number, idEmpresaDestino?: number): Promise<ClonarNotaResultado> {
+export async function clonarNotaParaPeriodo(idNota: number, anoDestino: number, mesDestino: number): Promise<ClonarNotaResultado> {
   const { data: origem, error: e1 } = await supabase
     .from('nota_explicativa_bp_dre')
     .select('id_class_bp_dre, id_empresa, tipo, titulo, numero_nota, texto_antes, texto_depois')
@@ -252,14 +187,12 @@ export async function clonarNotaParaPeriodo(idNota: number, anoDestino: number, 
     .single()
   if (e1) throw e1
 
-  const idEmpresa = idEmpresaDestino ?? origem.id_empresa
-
   if (origem.tipo === 'quadro') {
     const { data: existente, error: e2 } = await supabase
       .from('nota_explicativa_bp_dre')
       .select('id')
       .eq('id_class_bp_dre', origem.id_class_bp_dre as number)
-      .eq('id_empresa', idEmpresa)
+      .eq('id_empresa', origem.id_empresa)
       .eq('ano', anoDestino)
       .eq('mes', mesDestino)
       .maybeSingle()
@@ -271,7 +204,7 @@ export async function clonarNotaParaPeriodo(idNota: number, anoDestino: number, 
     .from('nota_explicativa_bp_dre')
     .insert({
       id_class_bp_dre: origem.id_class_bp_dre,
-      id_empresa: idEmpresa,
+      id_empresa: origem.id_empresa,
       ano: anoDestino,
       mes: mesDestino,
       tipo: origem.tipo,

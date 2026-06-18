@@ -1,8 +1,8 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import logoEbisaUrl from '../../assets/LOGO_EBISA_ENGENHARIA.png'
 import { isPLSg, fmtMoeda as fmtPDF, periodoLabel, type CalcDFResult } from './dfUtils'
 import type { DFParams } from './dfData'
-import { getLogoUrl } from './logoUtils'
 
 export type { DFParams }
 
@@ -17,13 +17,13 @@ async function loadBase64(url: string): Promise<string> {
 }
 
 export async function addHeader(doc: jsPDF, params: DFParams, title: string): Promise<number> {
-  const logoUrl = getLogoUrl(params.empresa.nome_logo)
+  const isEbisa = params.empresa.abreviacao.toLowerCase().includes('ebisa')
   const pageW = doc.internal.pageSize.getWidth()
   const margin = 15
   let y = 15
 
-  if (logoUrl) {
-    const imgData = await loadBase64(logoUrl)
+  if (isEbisa) {
+    const imgData = await loadBase64(logoEbisaUrl)
     doc.addImage(imgData, 'PNG', margin, y, 40, 15)
   } else {
     doc.setDrawColor(180)
@@ -76,27 +76,17 @@ export async function addHeader(doc: jsPDF, params: DFParams, title: string): Pr
   return y
 }
 
-export async function gerarDRE(params: DFParams, df1: CalcDFResult, df2?: CalcDFResult, emMilhares = false): Promise<void> {
+export async function gerarDRE(params: DFParams, df1: CalcDFResult, df2?: CalcDFResult): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const margin = 15
   const pageW = doc.internal.pageSize.getWidth()
-  const tableW = pageW - margin * 2  // 180mm
+  const tableW = pageW - margin * 2
   const hasDual = !!df2
-  const fmt = (v: number) => fmtPDF(emMilhares ? v / 1000 : v, 0)
 
   const startY = await addHeader(doc, params, 'DRE — Demonstração do Resultado do Exercício')
 
-  // Estrutura: [Descrição | Nota Explicativa | spacer | período1 | (spacer | período2 — só hasDual)]
-  // NE=2,0cm(20mm), spacer=0,3cm(3mm), valor=3,3cm(33mm), sep=0,3cm(3mm)
-  // dual:   88 + 20 + 3 + 33 + 3 + 33 = 180mm
-  // single: 124 + 20 + 3 + 33         = 180mm
-  const colNEW = 20
-  const colSpcW = 3
-  const colMidW = 3
-  const colValW = 33
-  const colDescW = hasDual
-    ? tableW - colNEW - colSpcW - colValW - colMidW - colValW
-    : tableW - colNEW - colSpcW - colValW
+  const colDesc = hasDual ? tableW * 0.55 : tableW * 0.65
+  const colVal = hasDual ? tableW * 0.225 : tableW * 0.35
 
   type CellDef = string | { content: string; colSpan?: number; styles?: object }
   type Row = CellDef[]
@@ -104,48 +94,38 @@ export async function gerarDRE(params: DFParams, df1: CalcDFResult, df2?: CalcDF
   const body: Row[] = []
   for (const g of df1.gruposResultado) {
     for (const item of g.itens) {
-      const saldo2 = hasDual ? (df2!.gruposResultado.flatMap(g2 => g2.itens).find(i => i.id === item.id)?.saldo ?? 0) : 0
-      if (item.saldo === 0 && saldo2 === 0) continue
-      body.push(hasDual
-        ? [item.desc_bp_dre, '', '', fmt(item.saldo), '', fmt(saldo2)]
-        : [item.desc_bp_dre, '', '', fmt(item.saldo)])
+      if (hasDual) {
+        const saldo2 = df2!.gruposResultado.flatMap(g2 => g2.itens).find(i => i.id === item.id)?.saldo ?? 0
+        body.push([item.desc_bp_dre, fmtPDF(item.saldo), fmtPDF(saldo2)])
+      } else {
+        body.push([item.desc_bp_dre, fmtPDF(item.saldo)])
+      }
     }
   }
 
-  const neCell = { content: 'Nota Explicativa', styles: { fontSize: 9 } }
-  const head: Row[] = [hasDual
-    ? ['Descrição', neCell, '', periodoLabel(params.periodo1!), '', periodoLabel(params.periodo2)]
-    : ['Descrição', neCell, '', periodoLabel(params.periodo2)]]
+  const head = hasDual
+    ? [['Descrição', periodoLabel(params.periodo1!), periodoLabel(params.periodo2)]]
+    : [['Descrição', periodoLabel(params.periodo2)]]
 
   const foot: Row[] = []
   if (hasDual) {
     foot.push([
       { content: 'RESULTADO', styles: { fontStyle: 'bold' } },
-      { content: '' },
-      { content: '' },
-      { content: fmt(df1.totalResultado), styles: { fontStyle: 'bold' } },
-      { content: '' },
-      { content: fmt(df2!.totalResultado), styles: { fontStyle: 'bold' } },
+      { content: fmtPDF(df1.totalResultado), styles: { fontStyle: 'bold' } },
+      { content: fmtPDF(df2!.totalResultado), styles: { fontStyle: 'bold' } },
     ])
   } else {
     foot.push([
       { content: 'RESULTADO', styles: { fontStyle: 'bold' } },
-      { content: '' },
-      { content: '' },
-      { content: fmt(df1.totalResultado), styles: { fontStyle: 'bold' } },
+      { content: fmtPDF(df1.totalResultado), styles: { fontStyle: 'bold' } },
     ])
   }
 
   const colStyles: Record<number, object> = {
-    0: { cellWidth: colDescW },
-    1: { cellWidth: colNEW },
-    2: { cellWidth: colSpcW },
-    3: { cellWidth: colValW, halign: 'right' },
+    0: { cellWidth: colDesc },
+    1: { cellWidth: colVal, halign: 'right' },
   }
-  if (hasDual) {
-    colStyles[4] = { cellWidth: colMidW }
-    colStyles[5] = { cellWidth: colValW, halign: 'right' }
-  }
+  if (hasDual) colStyles[2] = { cellWidth: colVal, halign: 'right' }
 
   autoTable(doc, {
     startY,
@@ -153,7 +133,7 @@ export async function gerarDRE(params: DFParams, df1: CalcDFResult, df2?: CalcDF
     body,
     foot,
     theme: 'grid',
-    styles: { fontSize: 12, font: 'helvetica', cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [30, 30, 120], textColor: [255, 255, 255], fontStyle: 'bold' },
     footStyles: { fillColor: [220, 230, 255], textColor: [20, 20, 100] },
     columnStyles: colStyles,
@@ -162,13 +142,12 @@ export async function gerarDRE(params: DFParams, df1: CalcDFResult, df2?: CalcDF
   doc.save(`DRE_${params.empresa.abreviacao}_${params.periodo2.anoVigencia}.pdf`)
 }
 
-export async function gerarBP(params: DFParams, df1: CalcDFResult, df2?: CalcDFResult, emMilhares = false): Promise<void> {
+export async function gerarBP(params: DFParams, df1: CalcDFResult, df2?: CalcDFResult): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const margin = 15
   const pageW = doc.internal.pageSize.getWidth()
   const tableW = pageW - margin * 2
   const hasDual = !!df2
-  const fmt = (v: number) => fmtPDF(emMilhares ? v / 1000 : v, 0)
 
   const startY = await addHeader(doc, params, 'BP — Balanço Patrimonial')
 
@@ -189,9 +168,9 @@ export async function gerarBP(params: DFParams, df1: CalcDFResult, df2?: CalcDFR
     for (const item of g.itens) {
       if (hasDual) {
         const saldo2 = df2!.gruposBP.flatMap(g2 => g2.itens).find(i => i.id === item.id)?.saldo ?? 0
-        body.push([item.desc_bp_dre, fmt(item.saldo), fmt(saldo2)])
+        body.push([item.desc_bp_dre, fmtPDF(item.saldo), fmtPDF(saldo2)])
       } else {
-        body.push([item.desc_bp_dre, fmt(item.saldo)])
+        body.push([item.desc_bp_dre, fmtPDF(item.saldo)])
       }
     }
 
@@ -199,13 +178,13 @@ export async function gerarBP(params: DFParams, df1: CalcDFResult, df2?: CalcDFR
       if (hasDual) {
         body.push([
           { content: 'Resultado do Período', styles: { textColor: [40, 60, 140], fontStyle: 'italic' } },
-          { content: fmt(df1.totalResultado), styles: { textColor: [40, 60, 140], fontStyle: 'italic' } },
-          { content: fmt(df2!.totalResultado), styles: { textColor: [40, 60, 140], fontStyle: 'italic' } },
+          { content: fmtPDF(df1.totalResultado), styles: { textColor: [40, 60, 140], fontStyle: 'italic' } },
+          { content: fmtPDF(df2!.totalResultado), styles: { textColor: [40, 60, 140], fontStyle: 'italic' } },
         ])
       } else {
         body.push([
           { content: 'Resultado do Período', styles: { textColor: [40, 60, 140], fontStyle: 'italic' } },
-          { content: fmt(df1.totalResultado), styles: { textColor: [40, 60, 140], fontStyle: 'italic' } },
+          { content: fmtPDF(df1.totalResultado), styles: { textColor: [40, 60, 140], fontStyle: 'italic' } },
         ])
       }
     }
@@ -217,13 +196,13 @@ export async function gerarBP(params: DFParams, df1: CalcDFResult, df2?: CalcDFR
     if (hasDual) {
       body.push([
         { content: `Subtotal ${g.subgrupo.sigla_subgrupo}`, styles: { fontStyle: 'bold', fillColor: [240, 242, 248] } },
-        { content: fmt(subtotal1), styles: { fontStyle: 'bold', fillColor: [240, 242, 248] } },
-        { content: fmt(subtotal2), styles: { fontStyle: 'bold', fillColor: [240, 242, 248] } },
+        { content: fmtPDF(subtotal1), styles: { fontStyle: 'bold', fillColor: [240, 242, 248] } },
+        { content: fmtPDF(subtotal2), styles: { fontStyle: 'bold', fillColor: [240, 242, 248] } },
       ])
     } else {
       body.push([
         { content: `Subtotal ${g.subgrupo.sigla_subgrupo}`, styles: { fontStyle: 'bold', fillColor: [240, 242, 248] } },
-        { content: fmt(subtotal1), styles: { fontStyle: 'bold', fillColor: [240, 242, 248] } },
+        { content: fmtPDF(subtotal1), styles: { fontStyle: 'bold', fillColor: [240, 242, 248] } },
       ])
     }
   }
@@ -237,24 +216,24 @@ export async function gerarBP(params: DFParams, df1: CalcDFResult, df2?: CalcDFR
     foot.push(
       [
         { content: 'Total Ativo', styles: { fontStyle: 'bold' } },
-        { content: fmt(df1.totalAtivo), styles: { fontStyle: 'bold' } },
-        { content: fmt(df2!.totalAtivo), styles: { fontStyle: 'bold' } },
+        { content: fmtPDF(df1.totalAtivo), styles: { fontStyle: 'bold' } },
+        { content: fmtPDF(df2!.totalAtivo), styles: { fontStyle: 'bold' } },
       ],
       [
         { content: 'Total Passivo + PL', styles: { fontStyle: 'bold' } },
-        { content: fmt(df1.totalPassivoEPL), styles: { fontStyle: 'bold' } },
-        { content: fmt(df2!.totalPassivoEPL), styles: { fontStyle: 'bold' } },
+        { content: fmtPDF(df1.totalPassivoEPL), styles: { fontStyle: 'bold' } },
+        { content: fmtPDF(df2!.totalPassivoEPL), styles: { fontStyle: 'bold' } },
       ],
     )
   } else {
     foot.push(
       [
         { content: 'Total Ativo', styles: { fontStyle: 'bold' } },
-        { content: fmt(df1.totalAtivo), styles: { fontStyle: 'bold' } },
+        { content: fmtPDF(df1.totalAtivo), styles: { fontStyle: 'bold' } },
       ],
       [
         { content: 'Total Passivo + PL', styles: { fontStyle: 'bold' } },
-        { content: fmt(df1.totalPassivoEPL), styles: { fontStyle: 'bold' } },
+        { content: fmtPDF(df1.totalPassivoEPL), styles: { fontStyle: 'bold' } },
       ],
     )
   }

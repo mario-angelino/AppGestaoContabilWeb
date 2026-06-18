@@ -25,7 +25,6 @@ export default function ImprimirModal({ params, dfFinal, dfInicial, tipoAtual, o
     new Set(tipoAtual === 'DRE' || tipoAtual === 'BP' ? [tipoAtual] : [])
   )
   const [formato, setFormato] = useState<'pdf' | 'docx'>('pdf')
-  const [emMilhares, setEmMilhares] = useState(false)
   const [gerando, setGerando] = useState(false)
 
   function toggle(tipo: TipoDF) {
@@ -40,16 +39,15 @@ export default function ImprimirModal({ params, dfFinal, dfInicial, tipoAtual, o
   async function handleImprimir() {
     setGerando(true)
     try {
-      const df1 = dfInicial ?? dfFinal
-      const df2 = dfInicial ? dfFinal : undefined
+      const args: [DFParams, CalcDFResult, CalcDFResult?] = dfInicial ? [params, dfInicial, dfFinal] : [params, dfFinal]
 
       if (selecionados.has('DRE')) {
-        if (formato === 'pdf') await gerarDRE(params, df1, df2, emMilhares)
-        else await gerarDREdocx(params, df1, df2, emMilhares)
+        if (formato === 'pdf') await gerarDRE(...args)
+        else await gerarDREdocx(...args)
       }
       if (selecionados.has('BP')) {
-        if (formato === 'pdf') await gerarBP(params, df1, df2, emMilhares)
-        else await gerarBPdocx(params, df1, df2, emMilhares)
+        if (formato === 'pdf') await gerarBP(...args)
+        else await gerarBPdocx(...args)
       }
       onClose()
     } finally {
@@ -88,7 +86,7 @@ export default function ImprimirModal({ params, dfFinal, dfInicial, tipoAtual, o
 
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Formato</p>
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex gap-4">
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                 <input type="radio" name="formato" checked={formato === 'pdf'} onChange={() => setFormato('pdf')} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
                 PDF
@@ -96,15 +94,6 @@ export default function ImprimirModal({ params, dfFinal, dfInicial, tipoAtual, o
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                 <input type="radio" name="formato" checked={formato === 'docx'} onChange={() => setFormato('docx')} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
                 Word (.docx)
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={emMilhares}
-                  onChange={e => setEmMilhares(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                Valores em R$ mil
               </label>
             </div>
           </div>

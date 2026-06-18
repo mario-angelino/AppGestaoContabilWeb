@@ -47,7 +47,7 @@ function renderPdfParagraph(doc: jsPDF, el: Element, cursor: PdfCursor, x: numbe
   const tag = el.tagName.toLowerCase()
   const align = alignFromStyle(el)
   const isHeading = /^h[1-6]$/.test(tag)
-  const fontSize = isHeading ? (tag === 'h1' ? 16 : tag === 'h2' ? 14.5 : 13.5) : 12
+  const fontSize = isHeading ? (tag === 'h1' ? 13 : tag === 'h2' ? 11.5 : 10.5) : 9
   const bold = isHeading || isFullyWrapped(el, ['STRONG', 'B'])
   const italic = isFullyWrapped(el, ['EM', 'I'])
   doc.setFont('helvetica', bold && italic ? 'bolditalic' : bold ? 'bold' : italic ? 'italic' : 'normal')
@@ -96,7 +96,7 @@ function renderPdfTable(doc: jsPDF, table: Element, cursor: PdfCursor, x: number
     body,
     margin: { left: x, right: pageW - x - maxWidth },
     theme: 'grid',
-    styles: { fontSize: 12, cellPadding: 1.5 },
+    styles: { fontSize: 8, cellPadding: 1.5 },
     headStyles: { fillColor: [230, 230, 240], textColor: [30, 30, 30] },
   })
   cursor.y = lastAutoTableFinalY(doc) + 3
@@ -151,7 +151,7 @@ function inlineRuns(node: Node, marks: Marks, size: number): TextRun[] {
   node.childNodes.forEach(child => {
     if (child.nodeType === Node.TEXT_NODE) {
       const text = child.textContent ?? ''
-      if (text) runs.push(new TextRun({ text, size, font: 'Arial', ...marks }))
+      if (text) runs.push(new TextRun({ text, size, ...marks }))
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       const el = child as Element
       const tag = el.tagName.toLowerCase()
@@ -172,10 +172,10 @@ function inlineRuns(node: Node, marks: Marks, size: number): TextRun[] {
 function docxParagraph(el: Element, prefix = ''): Paragraph {
   const tag = el.tagName.toLowerCase()
   const isHeading = /^h[1-6]$/.test(tag)
-  const size = isHeading ? 28 : 24
+  const size = isHeading ? 24 : 20
   const baseMarks: Marks = isHeading ? { bold: true } : {}
   const runs = inlineRuns(el, baseMarks, size)
-  if (prefix) runs.unshift(new TextRun({ text: prefix, size, font: 'Arial' }))
+  if (prefix) runs.unshift(new TextRun({ text: prefix, size }))
   return new Paragraph({
     alignment: alignType(el),
     children: runs.length ? runs : [new TextRun({ text: '', size })],
@@ -185,7 +185,7 @@ function docxParagraph(el: Element, prefix = ''): Paragraph {
 function docxCellContent(td: Element): Paragraph[] {
   const blocks = Array.from(td.children).filter(c => /^(p|h[1-6]|ul|ol)$/i.test(c.tagName))
   if (blocks.length === 0) {
-    return [new Paragraph({ alignment: alignType(td), children: inlineRuns(td, {}, 24) })]
+    return [new Paragraph({ alignment: alignType(td), children: inlineRuns(td, {}, 18) })]
   }
   const paragraphs: Paragraph[] = []
   for (const block of blocks) {
@@ -198,7 +198,7 @@ function docxCellContent(td: Element): Paragraph[] {
         const prefix = tag === 'ol' ? `${i}. ` : '• '
         paragraphs.push(new Paragraph({
           alignment: alignType(li) ?? cellAlign,
-          children: [new TextRun({ text: prefix, size: 24, font: 'Arial' }), ...inlineRuns(li, {}, 24)],
+          children: [new TextRun({ text: prefix, size: 18 }), ...inlineRuns(li, {}, 18)],
         }))
         i++
       }
@@ -206,7 +206,7 @@ function docxCellContent(td: Element): Paragraph[] {
       const isHeading = tag.startsWith('h')
       paragraphs.push(new Paragraph({
         alignment: cellAlign,
-        children: inlineRuns(block, isHeading ? { bold: true } : {}, isHeading ? 28 : 24),
+        children: inlineRuns(block, isHeading ? { bold: true } : {}, isHeading ? 22 : 18),
       }))
     }
   }

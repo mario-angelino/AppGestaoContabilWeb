@@ -363,7 +363,6 @@ export type Database = {
           fl_controlada: boolean | null
           fl_controladora: boolean | null
           id: number
-          nome_logo: string | null
           razao_social: string
         }
         Insert: {
@@ -375,7 +374,6 @@ export type Database = {
           fl_controlada?: boolean | null
           fl_controladora?: boolean | null
           id?: number
-          nome_logo?: string | null
           razao_social: string
         }
         Update: {
@@ -387,7 +385,6 @@ export type Database = {
           fl_controlada?: boolean | null
           fl_controladora?: boolean | null
           id?: number
-          nome_logo?: string | null
           razao_social?: string
         }
         Relationships: []

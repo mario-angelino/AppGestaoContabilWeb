@@ -1,13 +1,12 @@
 export const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-export function fmtMoeda(v: number, decimals = 2): string {
-  const abs = Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+export function fmtMoeda(v: number): string {
+  const abs = Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return v < 0 ? `(${abs})` : abs
 }
 
 export function periodoLabel(p: { mes: number; ano: number }): string {
-  const ultimoDia = new Date(p.ano, p.mes, 0).getDate()
-  return `${String(ultimoDia).padStart(2, '0')}/${String(p.mes).padStart(2, '0')}/${p.ano}`
+  return `${MESES[p.mes - 1]}/${p.ano}`
 }
 
 export interface SubgrupoVal {

@@ -8,7 +8,6 @@ interface Empresa {
   id: number
   abreviacao: string
   razao_social: string
-  nome_logo: string | null
 }
 
 interface BalanceteRow {
@@ -34,7 +33,7 @@ export default function NotaFiltro({ onChange }: NotaFiltroProps) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('empresa')
-        .select('id, abreviacao, razao_social, nome_logo')
+        .select('id, abreviacao, razao_social')
         .eq('fl_ativa', true)
         .order('abreviacao')
       if (error) throw error
@@ -83,7 +82,7 @@ export default function NotaFiltro({ onChange }: NotaFiltroProps) {
       return
     }
     const params: DFParams = {
-      empresa: { id: empresa.id, abreviacao: empresa.abreviacao, razao_social: empresa.razao_social, nome_logo: empresa.nome_logo },
+      empresa: { id: empresa.id, abreviacao: empresa.abreviacao, razao_social: empresa.razao_social },
       tipo: 'BP',
       periodo2: toPeriodo(bal2),
       periodo1: somenteUm || !bal1 ? null : toPeriodo(bal1),

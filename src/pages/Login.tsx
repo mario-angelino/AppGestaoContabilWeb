@@ -10,7 +10,7 @@ export default function Login(): JSX.Element {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  if (user) return <Navigate to="/planos" replace />
+  if (user) return <Navigate to="/dashboard" replace />
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -23,15 +23,20 @@ export default function Login(): JSX.Element {
       setError('E-mail ou senha inválidos.')
       setLoading(false)
     } else {
-      navigate('/planos', { replace: true })
+      navigate('/dashboard', { replace: true })
     }
   }
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
       <div className="bg-white rounded-2xl shadow-lg p-10 w-full max-w-sm">
-        <div className="mb-8">
-          <h1 className="text-xl font-bold text-gray-900">Gestão Plano de Contas</h1>
+        <div className="mb-8 flex flex-col items-center">
+          <img
+            src="/assets/images/LOGO_EBISA_ENGENHARIA.png"
+            alt="Logo EBISA Engenharia"
+            className="h-20 mb-5 object-contain"
+          />
+          <h1 className="text-xl font-bold text-gray-900 text-center">Gestão Contábil - GRUPO EBISA</h1>
           <p className="text-sm text-gray-500 mt-1">Faça login para continuar</p>
         </div>
 

@@ -13,7 +13,7 @@ export interface PeriodoDF {
 }
 
 export interface DFParams {
-  empresa: { id: number; abreviacao: string; razao_social: string }
+  empresa: { id: number; abreviacao: string; razao_social: string; nome_logo?: string | null }
   tipo: TipoDF
   periodo2: PeriodoDF
   periodo1: PeriodoDF | null

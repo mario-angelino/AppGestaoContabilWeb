@@ -43,46 +43,51 @@ export default function NotaQuadroView({ quadro, params }: NotaQuadroViewProps) 
           </thead>
         )}
         <tbody>
-          {quadro.linhas.map(linha => (
-            <tr key={linha.idClassNotaExplicativa} className="border-b border-gray-50">
-              <td className={`py-1.5 text-gray-700 pl-3 ${CELL_H}`}>{linha.desc_ne}</td>
-              {hasDual && (
-                <>
-                  <td className={`py-1.5 text-right font-mono ${CELL_H}`}>
-                    {params.periodo1 ? (
-                      <button
-                        className="text-gray-700 hover:text-blue-700 hover:underline"
-                        onClick={() => setDetalhe({
-                          idClassNotaExplicativa: linha.idClassNotaExplicativa,
-                          idClassSubgrupo: quadro.subgrupo.id,
-                          desc: linha.desc_ne,
-                          balanceteId: params.periodo1!.balanceteId,
-                          planoContasId: params.periodo1!.planoContasId,
-                        })}
-                      >
-                        {fmtMoeda(linha.saldoInicial ?? 0)}
-                      </button>
-                    ) : fmtMoeda(linha.saldoInicial ?? 0)}
-                  </td>
-                  <td className={SPACER_W}></td>
-                </>
-              )}
-              <td className={`py-1.5 text-right font-mono ${CELL_H}`}>
-                <button
-                  className="text-gray-700 hover:text-blue-700 hover:underline"
-                  onClick={() => setDetalhe({
-                    idClassNotaExplicativa: linha.idClassNotaExplicativa,
-                    idClassSubgrupo: quadro.subgrupo.id,
-                    desc: linha.desc_ne,
-                    balanceteId: params.periodo2.balanceteId,
-                    planoContasId: params.periodo2.planoContasId,
-                  })}
-                >
-                  {fmtMoeda(linha.saldoFinal)}
-                </button>
-              </td>
-            </tr>
-          ))}
+          {quadro.linhas.map(linha => {
+            const rowKey = linha.isVariavel ? `v${linha.idNotaVariavel}` : `i${linha.idClassNotaExplicativa}`
+            return (
+              <tr key={rowKey} className="border-b border-gray-50">
+                <td className={`py-1.5 text-gray-700 pl-3 ${CELL_H}`}>{linha.desc_ne}</td>
+                {hasDual && (
+                  <>
+                    <td className={`py-1.5 text-right font-mono ${CELL_H}`}>
+                      {params.periodo1 && !linha.isVariavel ? (
+                        <button
+                          className="text-gray-700 hover:text-blue-700 hover:underline"
+                          onClick={() => setDetalhe({
+                            idClassNotaExplicativa: linha.idClassNotaExplicativa!,
+                            idClassSubgrupo: quadro.subgrupo.id,
+                            desc: linha.desc_ne,
+                            balanceteId: params.periodo1!.balanceteId,
+                            planoContasId: params.periodo1!.planoContasId,
+                          })}
+                        >
+                          {fmtMoeda(linha.saldoInicial ?? 0)}
+                        </button>
+                      ) : fmtMoeda(linha.saldoInicial ?? 0)}
+                    </td>
+                    <td className={SPACER_W}></td>
+                  </>
+                )}
+                <td className={`py-1.5 text-right font-mono ${CELL_H}`}>
+                  {!linha.isVariavel ? (
+                    <button
+                      className="text-gray-700 hover:text-blue-700 hover:underline"
+                      onClick={() => setDetalhe({
+                        idClassNotaExplicativa: linha.idClassNotaExplicativa!,
+                        idClassSubgrupo: quadro.subgrupo.id,
+                        desc: linha.desc_ne,
+                        balanceteId: params.periodo2.balanceteId,
+                        planoContasId: params.periodo2.planoContasId,
+                      })}
+                    >
+                      {fmtMoeda(linha.saldoFinal)}
+                    </button>
+                  ) : fmtMoeda(linha.saldoFinal)}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
         <tfoot>
           <tr className="border-t border-gray-200 bg-gray-50">

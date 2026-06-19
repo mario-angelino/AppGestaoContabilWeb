@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { StickyNote, Search, Save, Plus, Pencil, X, Copy, Building2, Trash2, Printer } from 'lucide-react'
-import { computeNotaQuadros, MESES, type PlanoItem, type BpDreSubgrupoLink } from '../../lib/dfUtils'
+import { StickyNote, Search, Save, Plus, Pencil, X, Copy, Building2, Trash2, Printer, AlertTriangle } from 'lucide-react'
+import { computeNotaQuadros, MESES, type PlanoItem, type BpDreSubgrupoLink, type NotaVariavel } from '../../lib/dfUtils'
 import { fetchBalanceteItens, fetchPlanoItens, fetchLinks, type DFParams, type BalanceteItem } from '../../lib/dfData'
 import {
   fetchNotasExplicativasBpDre, fetchNotaItens, fetchClassNotasExplicativas, fetchClassBpDres,
   saveNotaCampos, upsertNotaExplicativaBpDre, criarNotaTexto, criarNotaEspecial, setNotaItens,
   fetchPeriodosDisponiveis, clonarNotaParaPeriodo, fetchEmpresasAtivas, excluirNotaExplicativaBpDre,
+  fetchNotaVariaveis, fetchVariaveisSelecionadas, setVariaveisSelecionadas,
   TIPOS_ESPECIAIS,
   type TipoNotaEspecial,
   type NotaExplicativaBpDre, type NotaExplicativaBpDreItem, type ClassNotaExplicativaOpt, type ClassBpDreOpt,
@@ -149,6 +150,11 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
   const { data: links = [] } = useQuery({
     queryKey: ['class_bp_dre_subgrupo_links'],
     queryFn: fetchLinks,
+  })
+
+  const { data: variaveis = [] } = useQuery({
+    queryKey: ['nota_variavel'],
+    queryFn: fetchNotaVariaveis,
   })
 
   const [novaCapaId, setNovaCapaId] = useState<number | ''>('')
@@ -424,6 +430,7 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
           nota={notaEditando}
           itensVinculados={itens.filter(i => i.id_nota_explicativa_bp_dre === notaEditando.id)}
           classNotas={classNotas}
+          variaveis={variaveis}
           links={links}
           planoItensFinal={planoItensFinal}
           bItemsFinal={bItemsFinal}
@@ -664,6 +671,7 @@ interface NotaCardProps {
   nota: NotaExplicativaBpDre
   itensVinculados: NotaExplicativaBpDreItem[]
   classNotas: ClassNotaExplicativaOpt[]
+  variaveis: NotaVariavel[]
   links: BpDreSubgrupoLink[]
   planoItensFinal: PlanoItem[]
   bItemsFinal: BalanceteItem[]
@@ -675,7 +683,7 @@ interface NotaCardProps {
 }
 
 function NotaCard({
-  nota, itensVinculados, classNotas, links, planoItensFinal, bItemsFinal, planoItensInicial, bItemsInicial, params, onSaved, onClose,
+  nota, itensVinculados, classNotas, variaveis, links, planoItensFinal, bItemsFinal, planoItensInicial, bItemsInicial, params, onSaved, onClose,
 }: NotaCardProps) {
   const isTexto = nota.tipo === 'texto'
   const isQuadro = nota.tipo === 'quadro'
@@ -690,6 +698,14 @@ function NotaCard({
   const [salvando, setSalvando] = useState(false)
   const [dirty, setDirty] = useState(false)
 
+  const { data: varSelecionadasInit = [] } = useQuery({
+    queryKey: ['nota_variaveis_selecionadas', nota.id],
+    queryFn: () => fetchVariaveisSelecionadas(nota.id),
+    enabled: isQuadro,
+  })
+  const [selecionadosVar, setSelecionadosVar] = useState<Set<number> | null>(null)
+  const varSelecionadas: Set<number> = selecionadosVar ?? new Set(varSelecionadasInit)
+
   function toggleItem(id: number) {
     setSelecionados(prev => {
       const next = new Set(prev)
@@ -700,6 +716,32 @@ function NotaCard({
     setDirty(true)
   }
 
+  function toggleVariavel(id: number) {
+    setSelecionadosVar(prev => {
+      const base = prev ?? new Set(varSelecionadasInit)
+      const next = new Set(base)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    setDirty(true)
+  }
+
+  // Guardrail: class_ne individuais selecionadas que pertencem a alguma variável selecionada
+  const guardrailItems = isQuadro ? (() => {
+    const result: { desc_ne: string; nomeVar: string }[] = []
+    for (const v of variaveis) {
+      if (!varSelecionadas.has(v.id)) continue
+      for (const op of v.operandos) {
+        if (selecionados.has(op.idClassNotaExplicativa)) {
+          const desc = classNotas.find(c => c.id === op.idClassNotaExplicativa)?.desc_ne ?? String(op.idClassNotaExplicativa)
+          result.push({ desc_ne: desc, nomeVar: v.descricao })
+        }
+      }
+    }
+    return result
+  })() : []
+
   async function handleSalvar() {
     setSalvando(true)
     try {
@@ -709,6 +751,7 @@ function NotaCard({
       ]
       if (!isTexto) {
         promises.push(setNotaItens(nota.id, Array.from(selecionados)))
+        promises.push(setVariaveisSelecionadas(nota.id, Array.from(varSelecionadas)))
       }
       await Promise.all(promises)
       setDirty(false)
@@ -722,6 +765,8 @@ function NotaCard({
     links.filter(l => l.id_class_bp_dre === nota.id_class_bp_dre).map(l => l.id_class_subgrupo)
   )
 
+  const variadeisSelecionadasFiltradas = variaveis.filter(v => varSelecionadas.has(v.id))
+
   const quadros = isQuadro ? computeNotaQuadros(
     Array.from(selecionados),
     planoItensFinal,
@@ -729,6 +774,7 @@ function NotaCard({
     planoItensInicial,
     bItemsInicial,
     allowedSubgrupoIds,
+    variadeisSelecionadasFiltradas,
   ) : []
 
   return (
@@ -782,10 +828,27 @@ function NotaCard({
         <RichTextField label="Texto da nota" value={textoAntes} onChange={v => { setTextoAntes(v); setDirty(true) }} />
       ) : (
         <>
-          {/* Checklist de itens vinculados */}
+          {/* Checklist de itens vinculados + variáveis */}
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Itens vinculados</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-3">
+              {variaveis.length > 0 && (
+                <>
+                  <p className="col-span-full text-xs font-semibold text-indigo-600 uppercase tracking-wider mt-0.5 mb-0.5">Variáveis</p>
+                  {variaveis.map(v => (
+                    <label key={`var-${v.id}`} className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={varSelecionadas.has(v.id)}
+                        onChange={() => toggleVariavel(v.id)}
+                        className="w-4 h-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-indigo-700 font-medium">{v.descricao}</span>
+                    </label>
+                  ))}
+                  <p className="col-span-full text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1.5 mb-0.5">Individuais</p>
+                </>
+              )}
               {classNotas.map(c => (
                 <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer select-none">
                   <input
@@ -797,11 +860,28 @@ function NotaCard({
                   <span className="text-gray-700">{c.desc_ne}</span>
                 </label>
               ))}
-              {classNotas.length === 0 && (
+              {classNotas.length === 0 && variaveis.length === 0 && (
                 <p className="text-xs text-gray-400 col-span-full">Nenhum item de nota explicativa cadastrado.</p>
               )}
             </div>
           </div>
+
+          {/* Guardrail: itens individuais que já constam em variável selecionada */}
+          {guardrailItems.length > 0 && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+              <AlertTriangle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-800">
+                <p className="font-semibold mb-1">Atenção: itens possivelmente duplicados</p>
+                <ul className="list-disc list-inside space-y-0.5 text-xs">
+                  {guardrailItems.map((g, i) => (
+                    <li key={i}>
+                      <span className="font-medium">{g.desc_ne}</span> pertence à variável <span className="font-medium">{g.nomeVar}</span> — o valor pode aparecer duplicado no quadro.
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
 
           {/* Texto antes */}
           <RichTextField label="Texto antes do quadro" value={textoAntes} onChange={v => { setTextoAntes(v); setDirty(true) }} />

@@ -106,9 +106,20 @@ export async function gerarDRE(params: DFParams, df1: CalcDFResult, df2?: CalcDF
     for (const item of g.itens) {
       const saldo2 = hasDual ? (df2!.gruposResultado.flatMap(g2 => g2.itens).find(i => i.id === item.id)?.saldo ?? 0) : 0
       if (item.saldo === 0 && saldo2 === 0) continue
+      const bold = item.isCalculada ? { fontStyle: 'bold' as const } : undefined
       body.push(hasDual
-        ? [item.desc_bp_dre, '', '', fmt(item.saldo), '', fmt(saldo2)]
-        : [item.desc_bp_dre, '', '', fmt(item.saldo)])
+        ? [
+            bold ? { content: item.desc_bp_dre, styles: bold } : item.desc_bp_dre,
+            '', '',
+            bold ? { content: fmt(item.saldo), styles: bold } : fmt(item.saldo),
+            '',
+            bold ? { content: fmt(saldo2), styles: bold } : fmt(saldo2),
+          ]
+        : [
+            bold ? { content: item.desc_bp_dre, styles: bold } : item.desc_bp_dre,
+            '', '',
+            bold ? { content: fmt(item.saldo), styles: bold } : fmt(item.saldo),
+          ])
     }
   }
 

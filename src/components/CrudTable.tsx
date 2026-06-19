@@ -26,6 +26,7 @@ interface Props<T extends { id: number }> {
   onEdit: (id: number, values: Record<string, string | number | boolean | null>) => Promise<void>
   onDelete: (id: number) => Promise<void>
   extraActions?: (row: T) => React.ReactNode
+  extraHeaderAction?: React.ReactNode
 }
 
 type FormValues = Record<string, string | number | boolean>
@@ -73,7 +74,8 @@ export default function CrudTable<T extends { id: number }>({
   onAdd,
   onEdit,
   onDelete,
-  extraActions
+  extraActions,
+  extraHeaderAction,
 }: Props<T>): JSX.Element {
   const [modal, setModal] = useState<'add' | 'edit' | null>(null)
   const [editingRow, setEditingRow] = useState<T | null>(null)
@@ -140,13 +142,16 @@ export default function CrudTable<T extends { id: number }>({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-gray-800">{title}</h2>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={16} />
-          Novo
-        </button>
+        <div className="flex items-center gap-2">
+          {extraHeaderAction}
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            Novo
+          </button>
+        </div>
       </div>
 
       {/* Table */}

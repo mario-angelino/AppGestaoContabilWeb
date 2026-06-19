@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { FileBarChart, Search, Printer } from 'lucide-react'
 import { calcularDF, type CalcDFResult } from '../../lib/dfUtils'
-import { fetchBalanceteItens, fetchPlanoItens, fetchLinks, type DFParams } from '../../lib/dfData'
+import { fetchBalanceteItens, fetchPlanoItens, fetchLinks, fetchCamposCalculados, type DFParams } from '../../lib/dfData'
 import DFFiltro from './DFFiltro'
 import DemonstracaoView from './DemonstracaoView'
 import ImprimirModal from './ImprimirModal'
@@ -30,13 +30,16 @@ export default function Demonstracoes() {
         return
       }
 
-      const links = await fetchLinks()
+      const [links, camposCalculados] = await Promise.all([
+        fetchLinks(),
+        fetchCamposCalculados(),
+      ])
 
       const [bItemsFinal, planoItensFinal] = await Promise.all([
         fetchBalanceteItens(params.periodo2.balanceteId),
         fetchPlanoItens(params.periodo2.planoContasId),
       ])
-      const dfFinal = calcularDF(bItemsFinal, planoItensFinal, links)
+      const dfFinal = calcularDF(bItemsFinal, planoItensFinal, links, camposCalculados)
 
       let dfInicial: CalcDFResult | undefined
       if (params.periodo1) {
@@ -44,7 +47,7 @@ export default function Demonstracoes() {
         const planoItensInicial = params.periodo1.planoContasId === params.periodo2.planoContasId
           ? planoItensFinal
           : await fetchPlanoItens(params.periodo1.planoContasId)
-        dfInicial = calcularDF(bItemsInicial, planoItensInicial, links)
+        dfInicial = calcularDF(bItemsInicial, planoItensInicial, links, camposCalculados)
       }
 
       setResultado({ tipo: params.tipo, params, dfFinal, dfInicial })

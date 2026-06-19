@@ -120,15 +120,16 @@ export async function gerarDREdocx(params: DFParams, df1: CalcDFResult, df2?: Ca
     for (const item of g.itens) {
       const saldo2 = hasDual ? (df2!.gruposResultado.flatMap(g2 => g2.itens).find(i => i.id === item.id)?.saldo ?? 0) : 0
       if (item.saldo === 0 && saldo2 === 0) continue
+      const bold = item.isCalculada ? true : undefined
 
       const rowChildren = [
-        cell(item.desc_bp_dre, { font: F, size: S }),
+        cell(item.desc_bp_dre, { font: F, size: S, bold }),
         cell('', { font: F, size: S }),
         cell('', { font: F, size: S }),
-        cell(fmt(item.saldo), { align: AlignmentType.RIGHT, font: F, size: S }),
+        cell(fmt(item.saldo), { align: AlignmentType.RIGHT, font: F, size: S, bold }),
         ...(hasDual ? [
           cell('', { font: F, size: S }),
-          cell(fmt(saldo2), { align: AlignmentType.RIGHT, font: F, size: S }),
+          cell(fmt(saldo2), { align: AlignmentType.RIGHT, font: F, size: S, bold }),
         ] : []),
       ]
       rows.push(new TableRow({ children: rowChildren }))

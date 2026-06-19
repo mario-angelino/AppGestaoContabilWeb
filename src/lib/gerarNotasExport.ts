@@ -71,7 +71,7 @@ function dateHeaderCell(text: string): TableCell {
 }
 
 // Célula de total com borda superior de 1,5pt (mesma grossura da borda inferior das datas)
-function subtotalCell(text: string, opts: { align?: AlignmentType } = {}): TableCell {
+function subtotalCell(text: string, opts: { align?: typeof AlignmentType.RIGHT } = {}): TableCell {
   return new TableCell({
     borders: {
       top: { style: BorderStyle.SINGLE, size: 12, color: '000000' },

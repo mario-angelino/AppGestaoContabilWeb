@@ -36,9 +36,33 @@ export interface PlanoItem {
   class_nota_explicativa: { id: number; desc_ne: string } | null
 }
 
+export interface CampoCalculadoOperando {
+  idClassBpDre: number | null
+  idCampoCalculadoRef: number | null
+  sinal: 1 | -1
+}
+
+export interface CampoCalculado {
+  id: number
+  nome: string
+  tipoDf: 'DRE' | 'BP'
+  operandos: CampoCalculadoOperando[]
+}
+
+export interface NotaVariavelOperando {
+  idClassNotaExplicativa: number
+  sinal: 1 | -1
+}
+
+export interface NotaVariavel {
+  id: number
+  descricao: string
+  operandos: NotaVariavelOperando[]
+}
+
 export interface GrupoVal {
   subgrupo: SubgrupoVal
-  itens: { id: number; desc_bp_dre: string; saldo: number }[]
+  itens: { id: number; desc_bp_dre: string; saldo: number; isCalculada?: boolean }[]
   subtotal: number
 }
 
@@ -69,10 +93,67 @@ export function isAtivoSg(sg: SubgrupoVal): boolean {
   return d.includes('ativo') || s === 'AC' || s === 'ANC'
 }
 
+type DFItemMapped = { id: number; desc_bp_dre: string; saldo: number; isCalculada?: boolean }
+
+function injetarCamposCalculados(
+  items: DFItemMapped[],
+  campos: CampoCalculado[],
+  saldoBase: Map<number, number>
+): DFItemMapped[] {
+  if (campos.length === 0) return items
+  const result = [...items]
+  const saldoCampo = new Map<number, number>()
+  const resolved = new Set<number>()
+
+  let iter = 0
+  while (resolved.size < campos.length && iter <= campos.length) {
+    iter++
+    for (const campo of campos) {
+      if (resolved.has(campo.id)) continue
+      const allDepsResolved = campo.operandos.every(op =>
+        op.idCampoCalculadoRef == null || resolved.has(op.idCampoCalculadoRef)
+      )
+      if (!allDepsResolved) continue
+
+      let saldo = 0
+      for (const op of campo.operandos) {
+        if (op.idClassBpDre != null) {
+          saldo += (saldoBase.get(op.idClassBpDre) ?? 0) * op.sinal
+        } else if (op.idCampoCalculadoRef != null) {
+          saldo += (saldoCampo.get(op.idCampoCalculadoRef) ?? 0) * op.sinal
+        }
+      }
+      saldoCampo.set(campo.id, saldo)
+
+      // posição: após o último item que seja operando deste campo
+      let insertAfter = result.length - 1
+      for (let i = 0; i < result.length; i++) {
+        const item = result[i]
+        if (!item.isCalculada && campo.operandos.some(op => op.idClassBpDre === item.id)) {
+          insertAfter = i
+        }
+        if (item.isCalculada) {
+          // id negativo: -(campoId)
+          const campoId = -item.id
+          if (campo.operandos.some(op => op.idCampoCalculadoRef === campoId)) {
+            insertAfter = i
+          }
+        }
+      }
+
+      result.splice(insertAfter + 1, 0, { id: -(campo.id), desc_bp_dre: campo.nome, saldo, isCalculada: true })
+      resolved.add(campo.id)
+    }
+  }
+
+  return result
+}
+
 export function calcularDF(
   bItems: { conta: string; saldo_atual: number }[],
   planoItens: PlanoItem[],
-  links: BpDreSubgrupoLink[]
+  links: BpDreSubgrupoLink[],
+  camposCalculados: CampoCalculado[] = []
 ): CalcDFResult {
   // ── Passo 1: classificar itens do N:N em três categorias ──────────────
   const dreSet = new Set<number>()
@@ -134,10 +215,14 @@ export function calcularDF(
     return a.desc.localeCompare(b.desc)
   }
   const dreItems = Array.from(dreEntriesMap.values()).sort(sortEntries)
-  const gruposResultado: GrupoVal[] = dreItems.length > 0 ? [{
+  const dreItemsBase = dreItems.map(d => ({ id: d.bpId, desc_bp_dre: d.desc, saldo: saldoDRE.get(d.bpId) ?? 0 }))
+  const camposDRE = camposCalculados.filter(c => c.tipoDf === 'DRE')
+  const dreItemsWithCalc = injetarCamposCalculados(dreItemsBase, camposDRE, saldoDRE)
+  // subtotal exclui linhas calculadas para não duplicar valores no totalResultado
+  const gruposResultado: GrupoVal[] = dreItemsWithCalc.length > 0 ? [{
     subgrupo: { id: -1, sigla_subgrupo: 'RESULTADO', desc_subgrupo: null },
-    itens: dreItems.map(d => ({ id: d.bpId, desc_bp_dre: d.desc, saldo: saldoDRE.get(d.bpId) ?? 0 })),
-    subtotal: dreItems.reduce((acc, d) => acc + (saldoDRE.get(d.bpId) ?? 0), 0),
+    itens: dreItemsWithCalc,
+    subtotal: dreItemsWithCalc.filter(i => !i.isCalculada).reduce((acc, d) => acc + d.saldo, 0),
   }] : []
 
   // ── Passo 5: seção PL ─────────────────────────────────────────────────
@@ -196,7 +281,9 @@ export function calcularDF(
 // ── Notas explicativas ──────────────────────────────────────────────────────
 
 export interface NotaQuadroLinha {
-  idClassNotaExplicativa: number
+  idClassNotaExplicativa?: number  // undefined para linhas de variável
+  idNotaVariavel?: number          // definido para linhas de variável
+  isVariavel?: boolean
   desc_ne: string
   saldoFinal: number
   saldoInicial?: number
@@ -241,12 +328,13 @@ export function computeNotaQuadros(
   bItemsFinal: { conta: string; saldo_atual: number }[],
   planoItensInicial?: PlanoItem[],
   bItemsInicial?: { conta: string; saldo_atual: number }[],
-  allowedSubgrupoIds?: Set<number>
+  allowedSubgrupoIds?: Set<number>,
+  variaveis?: NotaVariavel[]
 ): NotaQuadro[] {
   const idsSet = new Set(classNotaExplicativaIds)
-  const saldoFinal = somarPorSubgrupoNota(idsSet, planoItensFinal, bItemsFinal)
+  const saldoFinalMap = somarPorSubgrupoNota(idsSet, planoItensFinal, bItemsFinal)
   const hasInicial = !!(planoItensInicial && bItemsInicial)
-  const saldoInicial = hasInicial
+  const saldoInicialMap = hasInicial
     ? somarPorSubgrupoNota(idsSet, planoItensInicial!, bItemsInicial!)
     : new Map<string, number>()
 
@@ -270,14 +358,60 @@ export function computeNotaQuadros(
     const linhas: NotaQuadroLinha[] = Array.from(neIds).map(neId => ({
       idClassNotaExplicativa: neId,
       desc_ne: neInfo.get(neId) ?? '',
-      saldoFinal: saldoFinal.get(`${sgId}|${neId}`) ?? 0,
-      saldoInicial: hasInicial ? (saldoInicial.get(`${sgId}|${neId}`) ?? 0) : undefined,
+      saldoFinal: saldoFinalMap.get(`${sgId}|${neId}`) ?? 0,
+      saldoInicial: hasInicial ? (saldoInicialMap.get(`${sgId}|${neId}`) ?? 0) : undefined,
     }))
     const subtotalFinal = linhas.reduce((acc, l) => acc + l.saldoFinal, 0)
     const subtotalInicial = hasInicial ? linhas.reduce((acc, l) => acc + (l.saldoInicial ?? 0), 0) : undefined
     const temSaldo = subtotalFinal !== 0 || (subtotalInicial ?? 0) !== 0
     if (!temSaldo) continue
     quadros.push({ subgrupo: sgInfo.get(sgId)!, linhas, subtotalFinal, subtotalInicial })
+  }
+
+  // ── Variáveis ──────────────────────────────────────────────────────────
+  if (variaveis && variaveis.length > 0) {
+    const allVarNeIds = new Set(variaveis.flatMap(v => v.operandos.map(op => op.idClassNotaExplicativa)))
+    const saldoFinalV = somarPorSubgrupoNota(allVarNeIds, planoItensFinal, bItemsFinal)
+    const saldoInicialV = hasInicial
+      ? somarPorSubgrupoNota(allVarNeIds, planoItensInicial!, bItemsInicial!)
+      : new Map<string, number>()
+
+    // subgrupos relevantes para as variáveis
+    const sgInfoV = new Map<number, SubgrupoVal>()
+    for (const pi of [...planoItensFinal, ...(planoItensInicial ?? [])]) {
+      if (pi.id_class_nota_explicativa == null || !allVarNeIds.has(pi.id_class_nota_explicativa)) continue
+      if (pi.id_class_subgrupo == null || !pi.class_subgrupo) continue
+      if (allowedSubgrupoIds && !allowedSubgrupoIds.has(pi.id_class_subgrupo)) continue
+      sgInfoV.set(pi.id_class_subgrupo, pi.class_subgrupo)
+    }
+
+    for (const v of variaveis) {
+      for (const [sgId, sg] of sgInfoV) {
+        let sf = 0
+        let si = 0
+        for (const op of v.operandos) {
+          const k = `${sgId}|${op.idClassNotaExplicativa}`
+          sf += (saldoFinalV.get(k) ?? 0) * op.sinal
+          si += hasInicial ? (saldoInicialV.get(k) ?? 0) * op.sinal : 0
+        }
+        if (sf === 0 && si === 0) continue
+
+        let quadro = quadros.find(q => q.subgrupo.id === sgId)
+        if (!quadro) {
+          quadro = { subgrupo: sg, linhas: [], subtotalFinal: 0, subtotalInicial: hasInicial ? 0 : undefined }
+          quadros.push(quadro)
+        }
+        quadro.linhas.push({
+          idNotaVariavel: v.id,
+          isVariavel: true,
+          desc_ne: v.descricao,
+          saldoFinal: sf,
+          ...(hasInicial ? { saldoInicial: si } : {}),
+        })
+        quadro.subtotalFinal += sf
+        if (hasInicial && quadro.subtotalInicial != null) quadro.subtotalInicial += si
+      }
+    }
   }
 
   quadros.sort((a, b) => a.subgrupo.sigla_subgrupo.localeCompare(b.subgrupo.sigla_subgrupo))

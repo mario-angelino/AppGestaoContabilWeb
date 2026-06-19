@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { type PlanoItem, type BpDreSubgrupoLink } from './dfUtils'
+import { type PlanoItem, type BpDreSubgrupoLink, type CampoCalculado } from './dfUtils'
 
 export type TipoDF = 'DRE' | 'BP' | 'DMPL' | 'DFC'
 
@@ -64,4 +64,30 @@ export async function fetchLinks(): Promise<BpDreSubgrupoLink[]> {
     .order('indice', { ascending: true, nullsFirst: false })
   if (error) throw error
   return data as unknown as BpDreSubgrupoLink[]
+}
+
+interface CampoCalculadoRaw {
+  id: number
+  nome: string
+  tipo_df: string
+  df_campo_calculado_operando: { id_class_bp_dre: number | null; id_campo_calculado_ref: number | null; sinal: number }[]
+}
+
+export async function fetchCamposCalculados(): Promise<CampoCalculado[]> {
+  const { data, error } = await supabase
+    .from('df_campo_calculado')
+    .select('id, nome, tipo_df, df_campo_calculado_operando!id_campo_calculado(id_class_bp_dre, id_campo_calculado_ref, sinal)')
+    .order('id')
+  if (error) throw error
+  const raw = data as unknown as CampoCalculadoRaw[]
+  return raw.map(c => ({
+    id: c.id,
+    nome: c.nome,
+    tipoDf: c.tipo_df as 'DRE' | 'BP',
+    operandos: (c.df_campo_calculado_operando ?? []).map(op => ({
+      idClassBpDre: op.id_class_bp_dre,
+      idCampoCalculadoRef: op.id_campo_calculado_ref,
+      sinal: op.sinal as 1 | -1,
+    })),
+  }))
 }

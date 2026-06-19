@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { NotaVariavel } from './dfUtils'
 
 export const TIPOS_ESPECIAIS = {
   investimento:         'Investimentos',
@@ -300,4 +301,53 @@ export async function clonarNotaParaPeriodo(idNota: number, anoDestino: number, 
   }
 
   return { ok: true, novaId: nova.id }
+}
+
+// ── Variáveis de notas explicativas ────────────────────────────────────────
+
+interface NotaVariavelRaw {
+  id: number
+  descricao: string
+  nota_variavel_operando: { id_class_nota_explicativa: number; sinal: number }[]
+}
+
+/** Lista todas as variáveis com seus operandos. */
+export async function fetchNotaVariaveis(): Promise<NotaVariavel[]> {
+  const { data, error } = await supabase
+    .from('nota_variavel')
+    .select('id, descricao, nota_variavel_operando(id_class_nota_explicativa, sinal)')
+    .order('descricao')
+  if (error) throw error
+  const raw = data as unknown as NotaVariavelRaw[]
+  return raw.map(v => ({
+    id: v.id,
+    descricao: v.descricao,
+    operandos: (v.nota_variavel_operando ?? []).map(op => ({
+      idClassNotaExplicativa: op.id_class_nota_explicativa,
+      sinal: op.sinal as 1 | -1,
+    })),
+  }))
+}
+
+/** IDs de variáveis selecionadas em uma capa de nota. */
+export async function fetchVariaveisSelecionadas(idNota: number): Promise<number[]> {
+  const { data, error } = await supabase
+    .from('nota_explicativa_bp_dre_variaveis')
+    .select('id_nota_variavel')
+    .eq('id_nota_explicativa_bp_dre', idNota)
+  if (error) throw error
+  return (data as { id_nota_variavel: number }[]).map(r => r.id_nota_variavel)
+}
+
+/** Substitui as variáveis selecionadas em uma capa de nota. */
+export async function setVariaveisSelecionadas(idNota: number, idsNotaVariavel: number[]): Promise<void> {
+  const { error: delErr } = await supabase
+    .from('nota_explicativa_bp_dre_variaveis')
+    .delete()
+    .eq('id_nota_explicativa_bp_dre', idNota)
+  if (delErr) throw delErr
+  if (idsNotaVariavel.length === 0) return
+  const rows = idsNotaVariavel.map(id => ({ id_nota_explicativa_bp_dre: idNota, id_nota_variavel: id }))
+  const { error: insErr } = await supabase.from('nota_explicativa_bp_dre_variaveis').insert(rows)
+  if (insErr) throw insErr
 }

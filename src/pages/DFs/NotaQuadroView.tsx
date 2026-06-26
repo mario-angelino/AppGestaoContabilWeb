@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { fmtMoeda, isAtivoSg, periodoLabel, type NotaQuadro } from '../../lib/dfUtils'
+import { fmtMoeda, isAtivoSg, periodoLabel, type NotaQuadro, type NotaVariavel } from '../../lib/dfUtils'
 import { type DFParams } from '../../lib/dfData'
 import NotaItemDetalheModal from './NotaItemDetalheModal'
+import NotaVariavelDetalheModal from './NotaVariavelDetalheModal'
 
 interface NotaQuadroViewProps {
   quadro: NotaQuadro
   params: DFParams
+  variaveis?: NotaVariavel[]
 }
 
 interface Detalhe {
@@ -16,12 +18,27 @@ interface Detalhe {
   planoContasId: number
 }
 
+interface VarDetalhe {
+  variavel: NotaVariavel
+  idClassSubgrupo: number
+  periodoLabel: string
+  balanceteId: number
+  planoContasId: number
+}
+
 const CELL_H = 'h-[0.6cm]'
 const SPACER_W = 'w-4'
 
-export default function NotaQuadroView({ quadro, params }: NotaQuadroViewProps) {
+export default function NotaQuadroView({ quadro, params, variaveis = [] }: NotaQuadroViewProps) {
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null)
+  const [varDetalhe, setVarDetalhe] = useState<VarDetalhe | null>(null)
   const hasDual = !!params.periodo1
+
+  function openVarDetalhe(idNotaVariavel: number, balanceteId: number, planoContasId: number, pLabel: string) {
+    const variavel = variaveis.find(v => v.id === idNotaVariavel)
+    if (!variavel) return
+    setVarDetalhe({ variavel, idClassSubgrupo: quadro.subgrupo.id, periodoLabel: pLabel, balanceteId, planoContasId })
+  }
   const labelFinal = periodoLabel(params.periodo2)
   const labelInicial = params.periodo1 ? periodoLabel(params.periodo1) : ''
 
@@ -64,6 +81,13 @@ export default function NotaQuadroView({ quadro, params }: NotaQuadroViewProps) 
                         >
                           {fmtMoeda(linha.saldoInicial ?? 0)}
                         </button>
+                      ) : params.periodo1 && linha.isVariavel && linha.idNotaVariavel != null ? (
+                        <button
+                          className="text-gray-700 hover:text-blue-700 hover:underline"
+                          onClick={() => openVarDetalhe(linha.idNotaVariavel!, params.periodo1!.balanceteId, params.periodo1!.planoContasId, periodoLabel(params.periodo1!))}
+                        >
+                          {fmtMoeda(linha.saldoInicial ?? 0)}
+                        </button>
                       ) : fmtMoeda(linha.saldoInicial ?? 0)}
                     </td>
                     <td className={SPACER_W}></td>
@@ -80,6 +104,13 @@ export default function NotaQuadroView({ quadro, params }: NotaQuadroViewProps) 
                         balanceteId: params.periodo2.balanceteId,
                         planoContasId: params.periodo2.planoContasId,
                       })}
+                    >
+                      {fmtMoeda(linha.saldoFinal)}
+                    </button>
+                  ) : linha.idNotaVariavel != null ? (
+                    <button
+                      className="text-gray-700 hover:text-blue-700 hover:underline"
+                      onClick={() => openVarDetalhe(linha.idNotaVariavel!, params.periodo2.balanceteId, params.periodo2.planoContasId, periodoLabel(params.periodo2))}
                     >
                       {fmtMoeda(linha.saldoFinal)}
                     </button>
@@ -117,6 +148,17 @@ export default function NotaQuadroView({ quadro, params }: NotaQuadroViewProps) 
           balanceteId={detalhe.balanceteId}
           planoContasId={detalhe.planoContasId}
           onClose={() => setDetalhe(null)}
+        />
+      )}
+
+      {varDetalhe && (
+        <NotaVariavelDetalheModal
+          variavel={varDetalhe.variavel}
+          idClassSubgrupo={varDetalhe.idClassSubgrupo}
+          periodoLabel={varDetalhe.periodoLabel}
+          balanceteId={varDetalhe.balanceteId}
+          planoContasId={varDetalhe.planoContasId}
+          onClose={() => setVarDetalhe(null)}
         />
       )}
     </div>

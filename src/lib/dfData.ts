@@ -70,13 +70,14 @@ interface CampoCalculadoRaw {
   id: number
   nome: string
   tipo_df: string
+  fl_indentado: boolean
   df_campo_calculado_operando: { id_class_bp_dre: number | null; id_campo_calculado_ref: number | null; sinal: number }[]
 }
 
 export async function fetchCamposCalculados(): Promise<CampoCalculado[]> {
   const { data, error } = await supabase
     .from('df_campo_calculado')
-    .select('id, nome, tipo_df, df_campo_calculado_operando!id_campo_calculado(id_class_bp_dre, id_campo_calculado_ref, sinal)')
+    .select('id, nome, tipo_df, fl_indentado, df_campo_calculado_operando!id_campo_calculado(id_class_bp_dre, id_campo_calculado_ref, sinal)')
     .order('id')
   if (error) throw error
   const raw = data as unknown as CampoCalculadoRaw[]
@@ -84,6 +85,7 @@ export async function fetchCamposCalculados(): Promise<CampoCalculado[]> {
     id: c.id,
     nome: c.nome,
     tipoDf: c.tipo_df as 'DRE' | 'BP',
+    flIndentado: c.fl_indentado,
     operandos: (c.df_campo_calculado_operando ?? []).map(op => ({
       idClassBpDre: op.id_class_bp_dre,
       idCampoCalculadoRef: op.id_campo_calculado_ref,

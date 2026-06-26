@@ -44,12 +44,13 @@ export default function DemonstracaoView({ tipo, params, dfFinal, dfInicial }: D
                 ? dfInicial!.gruposResultado.flatMap(g => g.itens).find(i => i.id === item.id)?.saldo ?? 0
                 : 0
               const calc = item.isCalculada
+              const indent = item.isIndentado
               return (
                 <tr
                   key={item.id}
                   className={`border-b border-gray-50${calc ? ' border-t border-t-gray-300' : ''}`}
                 >
-                  <td className={`py-1.5 ${calc ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                  <td className={`py-1.5 ${calc ? 'font-semibold text-gray-900' : 'text-gray-700'} ${indent ? 'pl-5' : ''}`}>
                     {item.desc_bp_dre}
                   </td>
                   {hasDual && (

@@ -7,7 +7,7 @@ import {
   fetchNotasExplicativasBpDre, fetchNotaItens, fetchClassNotasExplicativas, fetchClassBpDres,
   saveNotaCampos, upsertNotaExplicativaBpDre, criarNotaTexto, criarNotaEspecial, setNotaItens,
   fetchPeriodosDisponiveis, clonarNotaParaPeriodo, fetchEmpresasAtivas, excluirNotaExplicativaBpDre,
-  fetchNotaVariaveis, fetchVariaveisSelecionadas, setVariaveisSelecionadas,
+  fetchNotaVariaveis, fetchVariaveisSelecionadas, fetchVariaveisSelecionadasBatch, setVariaveisSelecionadas,
   TIPOS_ESPECIAIS,
   type TipoNotaEspecial,
   type NotaExplicativaBpDre, type NotaExplicativaBpDreItem, type ClassNotaExplicativaOpt, type ClassBpDreOpt,
@@ -157,6 +157,20 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
     queryFn: fetchNotaVariaveis,
   })
 
+  const { data: varSelBatch = [] } = useQuery({
+    queryKey: ['nota_variaveis_selecionadas_batch', idsNota],
+    queryFn: () => fetchVariaveisSelecionadasBatch(idsNota),
+    enabled: idsNota.length > 0,
+  })
+
+  // notaId → Set<variavelId>
+  const varSelPorNota = new Map<number, Set<number>>()
+  for (const row of varSelBatch) {
+    if (!varSelPorNota.has(row.id_nota_explicativa_bp_dre))
+      varSelPorNota.set(row.id_nota_explicativa_bp_dre, new Set())
+    varSelPorNota.get(row.id_nota_explicativa_bp_dre)!.add(row.id_nota_variavel)
+  }
+
   const [novaCapaId, setNovaCapaId] = useState<number | ''>('')
   const [criando, setCriando] = useState(false)
   const [mostrarCriarQuadro, setMostrarCriarQuadro] = useState(false)
@@ -186,8 +200,17 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
     const allowedSubgrupoIds = new Set(
       links.filter(l => l.id_class_bp_dre === nota.id_class_bp_dre).map(l => l.id_class_subgrupo)
     )
+    const varIdsSelecionadas = varSelPorNota.get(nota.id) ?? new Set<number>()
+    const variadeisDaNota = variaveis.filter(v => varIdsSelecionadas.has(v.id))
     const quadros = nota.tipo === 'quadro'
-      ? computeNotaQuadros(itensPorNota.get(nota.id) ?? [], planoItensFinal, bItemsFinal, planoItensInicial, bItemsInicial, allowedSubgrupoIds)
+      ? computeNotaQuadros(
+          itensPorNota.get(nota.id) ?? [],
+          planoItensFinal, bItemsFinal,
+          planoItensInicial, bItemsInicial,
+          allowedSubgrupoIds,
+          variadeisDaNota,
+          nota.id_class_bp_dre ?? undefined,
+        )
       : []
     return {
       id: nota.id,
@@ -775,6 +798,7 @@ function NotaCard({
     bItemsInicial,
     allowedSubgrupoIds,
     variadeisSelecionadasFiltradas,
+    nota.id_class_bp_dre ?? undefined,
   ) : []
 
   return (
@@ -890,7 +914,7 @@ function NotaCard({
           {quadros.length > 0 ? (
             <div className="space-y-4">
               {quadros.map(q => (
-                <NotaQuadroView key={q.subgrupo.id} quadro={q} params={params} />
+                <NotaQuadroView key={q.subgrupo.id} quadro={q} params={params} variaveis={variadeisSelecionadasFiltradas} />
               ))}
               <ResumoAtivoPassivo quadros={quadros} params={params} />
             </div>

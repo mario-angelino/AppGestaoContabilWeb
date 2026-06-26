@@ -339,6 +339,19 @@ export async function fetchVariaveisSelecionadas(idNota: number): Promise<number
   return (data as { id_nota_variavel: number }[]).map(r => r.id_nota_variavel)
 }
 
+/** Variáveis selecionadas para múltiplas capas de uma vez (usado na montagem de impressão). */
+export async function fetchVariaveisSelecionadasBatch(
+  idsNota: number[]
+): Promise<{ id_nota_explicativa_bp_dre: number; id_nota_variavel: number }[]> {
+  if (idsNota.length === 0) return []
+  const { data, error } = await supabase
+    .from('nota_explicativa_bp_dre_variaveis')
+    .select('id_nota_explicativa_bp_dre, id_nota_variavel')
+    .in('id_nota_explicativa_bp_dre', idsNota)
+  if (error) throw error
+  return data as { id_nota_explicativa_bp_dre: number; id_nota_variavel: number }[]
+}
+
 /** Substitui as variáveis selecionadas em uma capa de nota. */
 export async function setVariaveisSelecionadas(idNota: number, idsNotaVariavel: number[]): Promise<void> {
   const { error: delErr } = await supabase

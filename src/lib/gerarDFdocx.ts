@@ -74,8 +74,9 @@ export function buildDocxBodyHeader(params: DFParams, titulo: string, emMilhares
   ]
 }
 
-export function cell(text: string, opts: { bold?: boolean; align?: typeof AlignmentType.RIGHT; shading?: string; italics?: boolean; color?: string; colSpan?: number; size?: number; font?: string } = {}): TableCell {
+export function cell(text: string, opts: { bold?: boolean; align?: typeof AlignmentType.RIGHT; shading?: string; italics?: boolean; color?: string; colSpan?: number; size?: number; font?: string; width?: number } = {}): TableCell {
   return new TableCell({
+    width: opts.width ? { size: opts.width, type: WidthType.DXA } : undefined,
     columnSpan: opts.colSpan,
     shading: opts.shading ? { type: ShadingType.SOLID, color: opts.shading, fill: opts.shading } : undefined,
     children: [new Paragraph({

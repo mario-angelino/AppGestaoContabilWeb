@@ -46,6 +46,7 @@ export interface CampoCalculado {
   id: number
   nome: string
   tipoDf: 'DRE' | 'BP'
+  flIndentado: boolean
   operandos: CampoCalculadoOperando[]
 }
 
@@ -62,7 +63,7 @@ export interface NotaVariavel {
 
 export interface GrupoVal {
   subgrupo: SubgrupoVal
-  itens: { id: number; desc_bp_dre: string; saldo: number; isCalculada?: boolean }[]
+  itens: { id: number; desc_bp_dre: string; saldo: number; isCalculada?: boolean; isIndentado?: boolean }[]
   subtotal: number
 }
 
@@ -93,7 +94,7 @@ export function isAtivoSg(sg: SubgrupoVal): boolean {
   return d.includes('ativo') || s === 'AC' || s === 'ANC'
 }
 
-type DFItemMapped = { id: number; desc_bp_dre: string; saldo: number; isCalculada?: boolean }
+type DFItemMapped = { id: number; desc_bp_dre: string; saldo: number; isCalculada?: boolean; isIndentado?: boolean }
 
 function injetarCamposCalculados(
   items: DFItemMapped[],
@@ -146,7 +147,23 @@ function injetarCamposCalculados(
     }
   }
 
-  return result
+  // Mark items that belong to indented calculated fields
+  const indentedCampoIds = new Set<number>()
+  const indentedBpDreIds = new Set<number>()
+  for (const campo of campos) {
+    if (!campo.flIndentado) continue
+    indentedCampoIds.add(campo.id)
+    for (const op of campo.operandos) {
+      if (op.idClassBpDre != null) indentedBpDreIds.add(op.idClassBpDre)
+    }
+  }
+  if (indentedCampoIds.size === 0) return result
+
+  return result.map(item => {
+    if (item.isCalculada && indentedCampoIds.has(-item.id)) return { ...item, isIndentado: true }
+    if (!item.isCalculada && indentedBpDreIds.has(item.id)) return { ...item, isIndentado: true }
+    return item
+  })
 }
 
 export function calcularDF(
@@ -299,13 +316,15 @@ export interface NotaQuadro {
 function somarPorSubgrupoNota(
   classNotaExplicativaIds: Set<number>,
   planoItens: PlanoItem[],
-  bItems: { conta: string; saldo_atual: number }[]
+  bItems: { conta: string; saldo_atual: number }[],
+  allowedBpDreId?: number
 ): Map<string, number> {
   const bMap = new Map(bItems.map(b => [b.conta, b.saldo_atual]))
   const saldoMap = new Map<string, number>()
   for (const pi of planoItens) {
     if (pi.id_class_nota_explicativa == null || !classNotaExplicativaIds.has(pi.id_class_nota_explicativa)) continue
     if (pi.id_class_subgrupo == null) continue
+    if (allowedBpDreId != null && pi.id_class_bp_dre !== allowedBpDreId) continue
     const key = `${pi.id_class_subgrupo}|${pi.id_class_nota_explicativa}`
     saldoMap.set(key, (saldoMap.get(key) ?? 0) + (bMap.get(pi.conta) ?? 0))
   }
@@ -329,13 +348,14 @@ export function computeNotaQuadros(
   planoItensInicial?: PlanoItem[],
   bItemsInicial?: { conta: string; saldo_atual: number }[],
   allowedSubgrupoIds?: Set<number>,
-  variaveis?: NotaVariavel[]
+  variaveis?: NotaVariavel[],
+  allowedBpDreId?: number
 ): NotaQuadro[] {
   const idsSet = new Set(classNotaExplicativaIds)
-  const saldoFinalMap = somarPorSubgrupoNota(idsSet, planoItensFinal, bItemsFinal)
+  const saldoFinalMap = somarPorSubgrupoNota(idsSet, planoItensFinal, bItemsFinal, allowedBpDreId)
   const hasInicial = !!(planoItensInicial && bItemsInicial)
   const saldoInicialMap = hasInicial
-    ? somarPorSubgrupoNota(idsSet, planoItensInicial!, bItemsInicial!)
+    ? somarPorSubgrupoNota(idsSet, planoItensInicial!, bItemsInicial!, allowedBpDreId)
     : new Map<string, number>()
 
   // pares (subgrupo, nota) que existem estruturalmente no plano de contas (qualquer período)
@@ -347,6 +367,7 @@ export function computeNotaQuadros(
     if (pi.id_class_nota_explicativa == null || !idsSet.has(pi.id_class_nota_explicativa)) continue
     if (pi.id_class_subgrupo == null || !pi.class_subgrupo) continue
     if (allowedSubgrupoIds && !allowedSubgrupoIds.has(pi.id_class_subgrupo)) continue
+    if (allowedBpDreId != null && pi.id_class_bp_dre !== allowedBpDreId) continue
     sgInfo.set(pi.id_class_subgrupo, pi.class_subgrupo)
     if (pi.class_nota_explicativa) neInfo.set(pi.id_class_nota_explicativa, pi.class_nota_explicativa.desc_ne)
     if (!pairsBySg.has(pi.id_class_subgrupo)) pairsBySg.set(pi.id_class_subgrupo, new Set())
@@ -371,9 +392,9 @@ export function computeNotaQuadros(
   // ── Variáveis ──────────────────────────────────────────────────────────
   if (variaveis && variaveis.length > 0) {
     const allVarNeIds = new Set(variaveis.flatMap(v => v.operandos.map(op => op.idClassNotaExplicativa)))
-    const saldoFinalV = somarPorSubgrupoNota(allVarNeIds, planoItensFinal, bItemsFinal)
+    const saldoFinalV = somarPorSubgrupoNota(allVarNeIds, planoItensFinal, bItemsFinal, allowedBpDreId)
     const saldoInicialV = hasInicial
-      ? somarPorSubgrupoNota(allVarNeIds, planoItensInicial!, bItemsInicial!)
+      ? somarPorSubgrupoNota(allVarNeIds, planoItensInicial!, bItemsInicial!, allowedBpDreId)
       : new Map<string, number>()
 
     // subgrupos relevantes para as variáveis
@@ -382,6 +403,7 @@ export function computeNotaQuadros(
       if (pi.id_class_nota_explicativa == null || !allVarNeIds.has(pi.id_class_nota_explicativa)) continue
       if (pi.id_class_subgrupo == null || !pi.class_subgrupo) continue
       if (allowedSubgrupoIds && !allowedSubgrupoIds.has(pi.id_class_subgrupo)) continue
+      if (allowedBpDreId != null && pi.id_class_bp_dre !== allowedBpDreId) continue
       sgInfoV.set(pi.id_class_subgrupo, pi.class_subgrupo)
     }
 

@@ -39,6 +39,7 @@ interface CampoRaw {
   id: number
   nome: string
   tipo_df: string
+  fl_indentado: boolean
   df_campo_calculado_operando: CampoOperandoRaw[]
 }
 
@@ -54,6 +55,7 @@ interface CampoModalState {
   editId: number | null
   nome: string
   tipoDf: 'DRE' | 'BP'
+  flIndentado: boolean
   operandos: OperandoLocal[]
   addTipo: 'bp' | 'campo'
   addRefId: string
@@ -63,7 +65,7 @@ interface CampoModalState {
 }
 
 const CAMPO_MODAL_INIT: CampoModalState = {
-  open: false, editId: null, nome: '', tipoDf: 'DRE', operandos: [],
+  open: false, editId: null, nome: '', tipoDf: 'DRE', flIndentado: false, operandos: [],
   addTipo: 'bp', addRefId: '', addSinal: '1', saving: false, error: '',
 }
 
@@ -236,7 +238,7 @@ export default function ClassBpDre(): JSX.Element {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('df_campo_calculado')
-        .select('id, nome, tipo_df, df_campo_calculado_operando!id_campo_calculado(id, id_class_bp_dre, id_campo_calculado_ref, sinal)')
+        .select('id, nome, tipo_df, fl_indentado, df_campo_calculado_operando!id_campo_calculado(id, id_class_bp_dre, id_campo_calculado_ref, sinal)')
         .order('nome')
       if (error) throw error
       return data as unknown as CampoRaw[]
@@ -254,7 +256,7 @@ export default function ClassBpDre(): JSX.Element {
       const ref = camposList.find(x => x.id === op.id_campo_calculado_ref)
       return { tipo: 'campo' as const, refId: op.id_campo_calculado_ref!, sinal: op.sinal as 1 | -1, label: ref?.nome ?? String(op.id_campo_calculado_ref) }
     })
-    setCampoModal({ ...CAMPO_MODAL_INIT, open: true, editId: c.id, nome: c.nome, tipoDf: c.tipo_df as 'DRE' | 'BP', operandos: ops })
+    setCampoModal({ ...CAMPO_MODAL_INIT, open: true, editId: c.id, nome: c.nome, tipoDf: c.tipo_df as 'DRE' | 'BP', flIndentado: c.fl_indentado, operandos: ops })
   }
 
   const closeCampoModal = () => setCampoModal(CAMPO_MODAL_INIT)
@@ -285,12 +287,12 @@ export default function ClassBpDre(): JSX.Element {
     try {
       let campoId = campoModal.editId
       if (campoId) {
-        const { error } = await supabase.from('df_campo_calculado').update({ nome: campoModal.nome.trim(), tipo_df: campoModal.tipoDf }).eq('id', campoId)
+        const { error } = await supabase.from('df_campo_calculado').update({ nome: campoModal.nome.trim(), tipo_df: campoModal.tipoDf, fl_indentado: campoModal.flIndentado }).eq('id', campoId)
         if (error) throw new Error(error.message)
         const { error: delErr } = await supabase.from('df_campo_calculado_operando').delete().eq('id_campo_calculado', campoId)
         if (delErr) throw new Error(delErr.message)
       } else {
-        const { data, error } = await supabase.from('df_campo_calculado').insert({ nome: campoModal.nome.trim(), tipo_df: campoModal.tipoDf }).select('id').single()
+        const { data, error } = await supabase.from('df_campo_calculado').insert({ nome: campoModal.nome.trim(), tipo_df: campoModal.tipoDf, fl_indentado: campoModal.flIndentado }).select('id').single()
         if (error) throw new Error(error.message)
         campoId = data.id
       }
@@ -472,7 +474,14 @@ export default function ClassBpDre(): JSX.Element {
                 ) : (
                   camposList.map((c, i) => (
                     <tr key={c.id} className={`hover:bg-gray-50 ${i < camposList.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                      <td className="px-4 py-3 text-gray-800 font-medium">{c.nome}</td>
+                      <td className="px-4 py-3 text-gray-800 font-medium">
+                        <span>{c.nome}</span>
+                        {c.fl_indentado && (
+                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-600" title="Indentado na demonstração">
+                            ⇥ recuado
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${c.tipo_df === 'DRE' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
                           {c.tipo_df}
@@ -541,6 +550,17 @@ export default function ClassBpDre(): JSX.Element {
                   </select>
                 </div>
               </div>
+
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={campoModal.flIndentado}
+                  onChange={e => setCampoModal(m => ({ ...m, flIndentado: e.target.checked }))}
+                  className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                />
+                Indentado na demonstração
+                <span className="text-xs text-gray-400">(recua este campo e seus operandos)</span>
+              </label>
 
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Operandos da fórmula</p>

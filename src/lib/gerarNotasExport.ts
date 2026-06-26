@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, VerticalAlign, WidthType, BorderStyle, HeightRule } from 'docx'
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, VerticalAlign, WidthType, BorderStyle, HeightRule, TableLayoutType } from 'docx'
 import { fmtMoeda, isAtivoSg, periodoLabel, type NotaQuadro } from './dfUtils'
 import type { DFParams } from './dfData'
 import type { TipoNota } from './notasExplicativasData'
@@ -39,23 +39,25 @@ const ROW_HEIGHT = { value: 340, rule: HeightRule.ATLEAST }
 
 // Larguras de coluna fixas em DXA para A4 com margens 2cm (conteúdo = 9638 DXA).
 // Garante que todos os quadros de uma mesma nota tenham colunas idênticas.
-const SPACER_DXA = 180
-const VAL_DXA    = 2120
-const COL_WIDTHS_DUAL   = [9638 - SPACER_DXA - VAL_DXA * 2, VAL_DXA, SPACER_DXA, VAL_DXA] // [5218,2120,180,2120]
-const COL_WIDTHS_SINGLE = [6738, 2900]                                                        // sum = 9638
+const TOTAL_DXA  = 9638                                                                       // largura total do conteúdo
+const SPACER_DXA = 170                                                                        // 0,30cm
+const VAL_DXA    = 1587                                                                       // 2,80cm
+const COL_WIDTHS_DUAL   = [TOTAL_DXA - SPACER_DXA - VAL_DXA * 2, VAL_DXA, SPACER_DXA, VAL_DXA] // [6294,1587,170,1587]
+const COL_WIDTHS_SINGLE = [TOTAL_DXA - VAL_DXA, VAL_DXA]                                    // [8051,1587]
 
 // Célula espaçadora estreita entre colunas de valores de períodos distintos
 function spacerCell(): TableCell {
   return new TableCell({
-    width: { size: 180, type: WidthType.DXA },
+    width: { size: SPACER_DXA, type: WidthType.DXA },
     borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
     children: [new Paragraph({ text: '' })],
   })
 }
 
 // Célula de cabeçalho de data: alinhamento inferior-direito + borda inferior de 1,5pt
-function dateHeaderCell(text: string): TableCell {
+function dateHeaderCell(text: string, widthDxa?: number): TableCell {
   return new TableCell({
+    width: widthDxa ? { size: widthDxa, type: WidthType.DXA } : undefined,
     verticalAlign: VerticalAlign.BOTTOM,
     borders: {
       top: NO_BORDER,
@@ -70,24 +72,29 @@ function dateHeaderCell(text: string): TableCell {
   })
 }
 
-// Célula de total com borda superior de 1,5pt (mesma grossura da borda inferior das datas)
-function subtotalCell(text: string, opts: { align?: typeof AlignmentType.RIGHT } = {}): TableCell {
+// Célula de total com borda superior e inferior de 1,5pt
+function subtotalCell(text: string, opts: { align?: typeof AlignmentType.RIGHT; widthDxa?: number; italics?: boolean } = {}): TableCell {
   return new TableCell({
+    width: opts.widthDxa ? { size: opts.widthDxa, type: WidthType.DXA } : undefined,
     borders: {
       top: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
-      bottom: NO_BORDER,
+      bottom: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
       left: NO_BORDER,
       right: NO_BORDER,
     },
     children: [new Paragraph({
       alignment: opts.align,
-      children: [new TextRun({ text, bold: true, size: 24, font: 'Arial' })],
+      children: [new TextRun({ text, bold: !opts.italics, italics: opts.italics, size: 24, font: 'Arial' })],
     })],
   })
 }
 
 function tituloNota(nota: NotaParaImpressao): string {
   return nota.numeroNota != null ? `${nota.numeroNota} — ${nota.titulo}` : nota.titulo
+}
+
+function fmtLiquido(v: number, fmt: (n: number) => string): string {
+  return v < 0 ? `(${fmt(Math.abs(v))})` : fmt(v)
 }
 
 function resumoAtivoPassivo(quadros: NotaQuadro[]): { ativoFinal: number; ativoInicial: number; passivoFinal: number; passivoInicial: number } {
@@ -114,7 +121,7 @@ function deveExibirResumo(quadros: NotaQuadro[]): boolean {
 
 // ── PDF ──────────────────────────────────────────────────────────────────
 
-function renderQuadroPdf(doc: jsPDF, quadro: NotaQuadro, params: DFParams, x: number, maxWidth: number, startY: number): number {
+function renderQuadroPdf(doc: jsPDF, quadro: NotaQuadro, params: DFParams, x: number, maxWidth: number, startY: number, fmt: (v: number) => string): number {
   const hasDual = !!params.periodo1
   let y = startY
 
@@ -123,18 +130,18 @@ function renderQuadroPdf(doc: jsPDF, quadro: NotaQuadro, params: DFParams, x: nu
     : [['', periodoLabel(params.periodo2)]]
 
   const body = quadro.linhas.map(l => hasDual
-    ? [l.desc_ne, fmtMoeda(l.saldoInicial ?? 0), fmtMoeda(l.saldoFinal)]
-    : [l.desc_ne, fmtMoeda(l.saldoFinal)])
+    ? [l.desc_ne, fmt(l.saldoInicial ?? 0), fmt(l.saldoFinal)]
+    : [l.desc_ne, fmt(l.saldoFinal)])
 
   const foot: CellDef[][] = hasDual
     ? [[
         { content: '', styles: { fontStyle: 'bold' } },
-        { content: fmtMoeda(quadro.subtotalInicial ?? 0), styles: { fontStyle: 'bold', halign: 'right' } },
-        { content: fmtMoeda(quadro.subtotalFinal), styles: { fontStyle: 'bold', halign: 'right' } },
+        { content: fmt(quadro.subtotalInicial ?? 0), styles: { fontStyle: 'bold', halign: 'right' } },
+        { content: fmt(quadro.subtotalFinal), styles: { fontStyle: 'bold', halign: 'right' } },
       ]]
     : [[
         { content: '', styles: { fontStyle: 'bold' } },
-        { content: fmtMoeda(quadro.subtotalFinal), styles: { fontStyle: 'bold', halign: 'right' } },
+        { content: fmt(quadro.subtotalFinal), styles: { fontStyle: 'bold', halign: 'right' } },
       ]]
 
   const colStyles: Record<number, object> = hasDual
@@ -156,7 +163,7 @@ function renderQuadroPdf(doc: jsPDF, quadro: NotaQuadro, params: DFParams, x: nu
   return lastAutoTableFinalY(doc) + 4
 }
 
-function renderResumoPdf(doc: jsPDF, quadros: NotaQuadro[], params: DFParams, x: number, maxWidth: number, startY: number): number {
+function renderResumoPdf(doc: jsPDF, quadros: NotaQuadro[], params: DFParams, x: number, maxWidth: number, startY: number, fmt: (v: number) => string): number {
   const hasDual = !!params.periodo1
   const { ativoFinal, ativoInicial, passivoFinal, passivoInicial } = resumoAtivoPassivo(quadros)
 
@@ -164,14 +171,19 @@ function renderResumoPdf(doc: jsPDF, quadros: NotaQuadro[], params: DFParams, x:
     ? [['', periodoLabel(params.periodo1!), periodoLabel(params.periodo2)]]
     : [['', periodoLabel(params.periodo2)]]
 
+  const liquidoFinal = ativoFinal - passivoFinal
+  const liquidoInicial = ativoInicial - passivoInicial
+
   const body: CellDef[][] = hasDual
     ? [
-        [{ content: 'ATIVO', styles: { fontStyle: 'bold' } }, { content: fmtMoeda(ativoInicial), styles: { fontStyle: 'bold', halign: 'right' } }, { content: fmtMoeda(ativoFinal), styles: { fontStyle: 'bold', halign: 'right' } }],
-        [{ content: 'PASSIVO', styles: { fontStyle: 'bold' } }, { content: fmtMoeda(passivoInicial), styles: { fontStyle: 'bold', halign: 'right' } }, { content: fmtMoeda(passivoFinal), styles: { fontStyle: 'bold', halign: 'right' } }],
+        [{ content: 'ATIVO', styles: { fontStyle: 'bold' } }, { content: fmt(ativoInicial), styles: { fontStyle: 'bold', halign: 'right' } }, { content: fmt(ativoFinal), styles: { fontStyle: 'bold', halign: 'right' } }],
+        [{ content: 'PASSIVO', styles: { fontStyle: 'bold' } }, { content: fmt(passivoInicial), styles: { fontStyle: 'bold', halign: 'right' } }, { content: fmt(passivoFinal), styles: { fontStyle: 'bold', halign: 'right' } }],
+        [{ content: 'LÍQUIDO', styles: { fontStyle: 'italic' } }, { content: fmtLiquido(liquidoInicial, fmt), styles: { fontStyle: 'italic', halign: 'right' } }, { content: fmtLiquido(liquidoFinal, fmt), styles: { fontStyle: 'italic', halign: 'right' } }],
       ]
     : [
-        [{ content: 'ATIVO', styles: { fontStyle: 'bold' } }, { content: fmtMoeda(ativoFinal), styles: { fontStyle: 'bold', halign: 'right' } }],
-        [{ content: 'PASSIVO', styles: { fontStyle: 'bold' } }, { content: fmtMoeda(passivoFinal), styles: { fontStyle: 'bold', halign: 'right' } }],
+        [{ content: 'ATIVO', styles: { fontStyle: 'bold' } }, { content: fmt(ativoFinal), styles: { fontStyle: 'bold', halign: 'right' } }],
+        [{ content: 'PASSIVO', styles: { fontStyle: 'bold' } }, { content: fmt(passivoFinal), styles: { fontStyle: 'bold', halign: 'right' } }],
+        [{ content: 'LÍQUIDO', styles: { fontStyle: 'italic' } }, { content: fmtLiquido(liquidoFinal, fmt), styles: { fontStyle: 'italic', halign: 'right' } }],
       ]
 
   const colStyles: Record<number, object> = hasDual
@@ -192,11 +204,12 @@ function renderResumoPdf(doc: jsPDF, quadros: NotaQuadro[], params: DFParams, x:
   return lastAutoTableFinalY(doc) + 4
 }
 
-export async function gerarNotasPdf(params: DFParams, notas: NotaParaImpressao[]): Promise<void> {
+export async function gerarNotasPdf(params: DFParams, notas: NotaParaImpressao[], emMilhares = false): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const margin = 15
   const pageW = doc.internal.pageSize.getWidth()
   const maxWidth = pageW - margin * 2
+  const fmt = (v: number) => fmtMoeda(emMilhares ? v / 1000 : v, emMilhares ? 0 : 2)
 
   let first = true
   for (const nota of notas) {
@@ -223,10 +236,10 @@ export async function gerarNotasPdf(params: DFParams, notas: NotaParaImpressao[]
 
     if (nota.tipo === 'quadro') {
       for (const quadro of nota.quadros) {
-        y = renderQuadroPdf(doc, quadro, params, margin, maxWidth, y)
+        y = renderQuadroPdf(doc, quadro, params, margin, maxWidth, y, fmt)
       }
       if (deveExibirResumo(nota.quadros)) {
-        y = renderResumoPdf(doc, nota.quadros, params, margin, maxWidth, y)
+        y = renderResumoPdf(doc, nota.quadros, params, margin, maxWidth, y, fmt)
         y += BLANK_LINE
       }
     }
@@ -242,48 +255,49 @@ export async function gerarNotasPdf(params: DFParams, notas: NotaParaImpressao[]
 
 // ── DOCX ─────────────────────────────────────────────────────────────────
 
-function quadroToDocx(quadro: NotaQuadro, params: DFParams, showLabel = false): (Paragraph | Table)[] {
+function quadroToDocx(quadro: NotaQuadro, params: DFParams, showLabel = false, fmt: (v: number) => string = fmtMoeda): (Paragraph | Table)[] {
   const hasDual = !!params.periodo1
-  const colWidths = hasDual ? COL_WIDTHS_DUAL : COL_WIDTHS_SINGLE
+  const cw = hasDual ? COL_WIDTHS_DUAL : COL_WIDTHS_SINGLE
+  // cw[0]=desc, cw[1]=val1, cw[2]=spacer (dual only), cw[3]=val2 (dual only)
 
   const headCells = hasDual
     ? [
-        cell('', { size: 24, font: 'Arial' }),
-        dateHeaderCell(periodoLabel(params.periodo1!)),
+        cell('', { size: 24, font: 'Arial', width: cw[0] }),
+        dateHeaderCell(periodoLabel(params.periodo1!), cw[1]),
         spacerCell(),
-        dateHeaderCell(periodoLabel(params.periodo2)),
+        dateHeaderCell(periodoLabel(params.periodo2), cw[3]),
       ]
     : [
-        cell('', { size: 24, font: 'Arial' }),
-        dateHeaderCell(periodoLabel(params.periodo2)),
+        cell('', { size: 24, font: 'Arial', width: cw[0] }),
+        dateHeaderCell(periodoLabel(params.periodo2), cw[1]),
       ]
   const rows: TableRow[] = [new TableRow({ height: ROW_HEIGHT, children: headCells })]
 
   for (const linha of quadro.linhas) {
     const cells = hasDual
       ? [
-          cell(linha.desc_ne, { size: 24, font: 'Arial' }),
-          cell(fmtMoeda(linha.saldoInicial ?? 0), { align: AlignmentType.RIGHT, size: 24, font: 'Arial' }),
+          cell(linha.desc_ne, { size: 24, font: 'Arial', width: cw[0] }),
+          cell(fmt(linha.saldoInicial ?? 0), { align: AlignmentType.RIGHT, size: 24, font: 'Arial', width: cw[1] }),
           spacerCell(),
-          cell(fmtMoeda(linha.saldoFinal), { align: AlignmentType.RIGHT, size: 24, font: 'Arial' }),
+          cell(fmt(linha.saldoFinal), { align: AlignmentType.RIGHT, size: 24, font: 'Arial', width: cw[3] }),
         ]
       : [
-          cell(linha.desc_ne, { size: 24, font: 'Arial' }),
-          cell(fmtMoeda(linha.saldoFinal), { align: AlignmentType.RIGHT, size: 24, font: 'Arial' }),
+          cell(linha.desc_ne, { size: 24, font: 'Arial', width: cw[0] }),
+          cell(fmt(linha.saldoFinal), { align: AlignmentType.RIGHT, size: 24, font: 'Arial', width: cw[1] }),
         ]
     rows.push(new TableRow({ height: ROW_HEIGHT, children: cells }))
   }
 
   const subtotalCells = hasDual
     ? [
-        cell('', { size: 24, font: 'Arial' }),
-        subtotalCell(fmtMoeda(quadro.subtotalInicial ?? 0), { align: AlignmentType.RIGHT }),
+        cell('', { size: 24, font: 'Arial', width: cw[0] }),
+        subtotalCell(fmt(quadro.subtotalInicial ?? 0), { align: AlignmentType.RIGHT, widthDxa: cw[1] }),
         spacerCell(),
-        subtotalCell(fmtMoeda(quadro.subtotalFinal), { align: AlignmentType.RIGHT }),
+        subtotalCell(fmt(quadro.subtotalFinal), { align: AlignmentType.RIGHT, widthDxa: cw[3] }),
       ]
     : [
-        cell('', { size: 24, font: 'Arial' }),
-        subtotalCell(fmtMoeda(quadro.subtotalFinal), { align: AlignmentType.RIGHT }),
+        cell('', { size: 24, font: 'Arial', width: cw[0] }),
+        subtotalCell(fmt(quadro.subtotalFinal), { align: AlignmentType.RIGHT, widthDxa: cw[1] }),
       ]
   rows.push(new TableRow({ height: ROW_HEIGHT, children: subtotalCells }))
 
@@ -297,57 +311,75 @@ function quadroToDocx(quadro: NotaQuadro, params: DFParams, showLabel = false): 
       children: [new TextRun({ text: labelText, size: 18, font: 'Arial', color: '888888', italics: true })],
     }))
   }
-  result.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, columnWidths: colWidths, borders: NO_BORDERS, rows }))
+  result.push(new Table({ width: { size: TOTAL_DXA, type: WidthType.DXA }, layout: TableLayoutType.FIXED, columnWidths: cw, borders: NO_BORDERS, rows, alignment: AlignmentType.RIGHT }))
   result.push(new Paragraph({ text: '' }))
   return result
 }
 
-function resumoToDocx(quadros: NotaQuadro[], params: DFParams): Table {
+function resumoToDocx(quadros: NotaQuadro[], params: DFParams, fmt: (v: number) => string = fmtMoeda): Table {
   const hasDual = !!params.periodo1
+  const cw = hasDual ? COL_WIDTHS_DUAL : COL_WIDTHS_SINGLE
   const { ativoFinal, ativoInicial, passivoFinal, passivoInicial } = resumoAtivoPassivo(quadros)
 
   const headCells = hasDual
     ? [
-        cell('', { size: 24, font: 'Arial' }),
-        dateHeaderCell(periodoLabel(params.periodo1!)),
+        cell('', { size: 24, font: 'Arial', width: cw[0] }),
+        dateHeaderCell(periodoLabel(params.periodo1!), cw[1]),
         spacerCell(),
-        dateHeaderCell(periodoLabel(params.periodo2)),
+        dateHeaderCell(periodoLabel(params.periodo2), cw[3]),
       ]
     : [
-        cell('', { size: 24, font: 'Arial' }),
-        dateHeaderCell(periodoLabel(params.periodo2)),
+        cell('', { size: 24, font: 'Arial', width: cw[0] }),
+        dateHeaderCell(periodoLabel(params.periodo2), cw[1]),
       ]
   const rows: TableRow[] = [new TableRow({ height: ROW_HEIGHT, children: headCells })]
 
   const ativoCells = hasDual
     ? [
-        cell('ATIVO', { bold: true, size: 24, font: 'Arial' }),
-        cell(fmtMoeda(ativoInicial), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial' }),
+        cell('ATIVO', { bold: true, size: 24, font: 'Arial', width: cw[0] }),
+        cell(fmt(ativoInicial), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial', width: cw[1] }),
         spacerCell(),
-        cell(fmtMoeda(ativoFinal), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial' }),
+        cell(fmt(ativoFinal), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial', width: cw[3] }),
       ]
     : [
-        cell('ATIVO', { bold: true, size: 24, font: 'Arial' }),
-        cell(fmtMoeda(ativoFinal), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial' }),
+        cell('ATIVO', { bold: true, size: 24, font: 'Arial', width: cw[0] }),
+        cell(fmt(ativoFinal), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial', width: cw[1] }),
       ]
   const passivoCells = hasDual
     ? [
-        cell('PASSIVO', { bold: true, size: 24, font: 'Arial' }),
-        cell(fmtMoeda(passivoInicial), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial' }),
+        cell('PASSIVO', { bold: true, size: 24, font: 'Arial', width: cw[0] }),
+        cell(fmt(passivoInicial), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial', width: cw[1] }),
         spacerCell(),
-        cell(fmtMoeda(passivoFinal), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial' }),
+        cell(fmt(passivoFinal), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial', width: cw[3] }),
       ]
     : [
-        cell('PASSIVO', { bold: true, size: 24, font: 'Arial' }),
-        cell(fmtMoeda(passivoFinal), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial' }),
+        cell('PASSIVO', { bold: true, size: 24, font: 'Arial', width: cw[0] }),
+        cell(fmt(passivoFinal), { bold: true, align: AlignmentType.RIGHT, size: 24, font: 'Arial', width: cw[1] }),
       ]
+  const liquidoFinal = ativoFinal - passivoFinal
+  const liquidoInicial = ativoInicial - passivoInicial
+
+  const liquidoCells = hasDual
+    ? [
+        cell('LÍQUIDO', { italics: true, size: 24, font: 'Arial', width: cw[0] }),
+        subtotalCell(fmtLiquido(liquidoInicial, fmt), { align: AlignmentType.RIGHT, widthDxa: cw[1], italics: true }),
+        spacerCell(),
+        subtotalCell(fmtLiquido(liquidoFinal, fmt), { align: AlignmentType.RIGHT, widthDxa: cw[3], italics: true }),
+      ]
+    : [
+        cell('LÍQUIDO', { italics: true, size: 24, font: 'Arial', width: cw[0] }),
+        subtotalCell(fmtLiquido(liquidoFinal, fmt), { align: AlignmentType.RIGHT, widthDxa: cw[1], italics: true }),
+      ]
+
   rows.push(new TableRow({ height: ROW_HEIGHT, children: ativoCells }))
   rows.push(new TableRow({ height: ROW_HEIGHT, children: passivoCells }))
+  rows.push(new TableRow({ height: ROW_HEIGHT, children: liquidoCells }))
 
-  return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, columnWidths: hasDual ? COL_WIDTHS_DUAL : COL_WIDTHS_SINGLE, borders: NO_BORDERS, rows })
+  return new Table({ width: { size: TOTAL_DXA, type: WidthType.DXA }, layout: TableLayoutType.FIXED, columnWidths: cw, borders: NO_BORDERS, rows, alignment: AlignmentType.RIGHT })
 }
 
-export async function gerarNotasDocx(params: DFParams, notas: NotaParaImpressao[]): Promise<void> {
+export async function gerarNotasDocx(params: DFParams, notas: NotaParaImpressao[], emMilhares = false): Promise<void> {
+  const fmt = (v: number) => fmtMoeda(emMilhares ? v / 1000 : v, emMilhares ? 0 : 2)
   const pageHeader = await buildPageHeader(params)
   const tituloNotas = params.periodo1
     ? `Notas Explicativas às Demonstrações Financeiras dos exercícios findos em ${dataExtenso(params.periodo1.mes, params.periodo1.ano)} e ${dataExtenso(params.periodo2.mes, params.periodo2.ano)}`
@@ -367,10 +399,10 @@ export async function gerarNotasDocx(params: DFParams, notas: NotaParaImpressao[
     if (nota.tipo === 'quadro') {
       const multiQuadro = nota.quadros.length > 1
       for (const quadro of nota.quadros) {
-        children.push(...quadroToDocx(quadro, params, multiQuadro))
+        children.push(...quadroToDocx(quadro, params, multiQuadro, fmt))
       }
       if (deveExibirResumo(nota.quadros)) {
-        children.push(resumoToDocx(nota.quadros, params))
+        children.push(resumoToDocx(nota.quadros, params, fmt))
         children.push(new Paragraph({ text: '' }))
       }
     }

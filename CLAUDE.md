@@ -11,3 +11,10 @@ App de gestão contábil (React + Vite + Supabase), uso interno da empresa, hosp
 - Ao adicionar uma dependência nova, rodar `npm audit` e avisar se aparecer algo de severidade alta/crítica antes de seguir.
 - Antes de finalizar uma feature que toca em autenticação, dados sensíveis ou upload de arquivos, rodar a skill `security-review` no diff.
 - Não usar `dangerouslySetInnerHTML`, `eval` ou interpolação de HTML não sanitizado.
+
+## Supabase
+
+- Ao regenerar `src/lib/database.types.ts`, usar obrigatoriamente `| Out-File -Encoding utf8` em vez de `>` para evitar encoding UTF-16 LE que quebra o build no Netlify:
+  ```powershell
+  npx supabase@latest gen types typescript --project-id wjccwtpionrorgkozsbr | Out-File -Encoding utf8 src/lib/database.types.ts
+  ```

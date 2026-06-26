@@ -11,7 +11,8 @@ interface ImprimirNotasModalProps {
 
 export default function ImprimirNotasModal({ params, notas, onClose }: ImprimirNotasModalProps) {
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set(notas.map(n => n.id)))
-  const [formato, setFormato] = useState<'pdf' | 'docx'>('pdf')
+  const [formato, setFormato] = useState<'pdf' | 'docx'>('docx')
+  const [emMilhares, setEmMilhares] = useState(true)
   const [gerando, setGerando] = useState(false)
 
   function toggle(id: number) {
@@ -30,8 +31,8 @@ export default function ImprimirNotasModal({ params, notas, onClose }: ImprimirN
         .filter(n => selecionados.has(n.id))
         .sort((a, b) => (a.numeroNota ?? Infinity) - (b.numeroNota ?? Infinity))
 
-      if (formato === 'pdf') await gerarNotasPdf(params, escolhidas)
-      else await gerarNotasDocx(params, escolhidas)
+      if (formato === 'pdf') await gerarNotasPdf(params, escolhidas, emMilhares)
+      else await gerarNotasDocx(params, escolhidas, emMilhares)
       onClose()
     } finally {
       setGerando(false)
@@ -71,7 +72,7 @@ export default function ImprimirNotasModal({ params, notas, onClose }: ImprimirN
 
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Formato</p>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                 <input type="radio" name="formato" checked={formato === 'pdf'} onChange={() => setFormato('pdf')} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
                 PDF
@@ -79,6 +80,15 @@ export default function ImprimirNotasModal({ params, notas, onClose }: ImprimirN
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                 <input type="radio" name="formato" checked={formato === 'docx'} onChange={() => setFormato('docx')} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
                 Word (.docx)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={emMilhares}
+                  onChange={e => setEmMilhares(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                Valores em R$ mil
               </label>
             </div>
           </div>

@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { getLogoUrl } from '../lib/logoUtils'
+
+const logoEbisa = getLogoUrl('LOGO_EBISA_ENGENHARIA.png')
 
 export default function Login(): JSX.Element {
   const { user, signIn } = useAuth()
@@ -32,7 +35,7 @@ export default function Login(): JSX.Element {
       <div className="bg-white rounded-2xl shadow-lg p-10 w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center">
           <img
-            src="/assets/images/LOGO_EBISA_ENGENHARIA.png"
+            src={logoEbisa}
             alt="Logo EBISA Engenharia"
             className="h-20 mb-5 object-contain"
           />

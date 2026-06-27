@@ -1,6 +1,30 @@
 # Diretrizes do projeto
 
-App de gestão contábil (React + Vite + Supabase), uso interno da empresa, hospedado na Netlify.
+## Visão do Projeto
+
+- App web de gestão contábil (React + Vite + TypeScript + Supabase), uso interno da empresa, hospedado na Netlify.
+- Migrado do AppGestaoPlanoContas (Electron) para web pura. **Hoje é 100% web — nada mais é feito para Electron.** Não usar, sugerir ou referenciar APIs Electron (`window.electronAPI`, `ipcRenderer`, `dialog`, filesystem nativo, etc.). Toda I/O de arquivo usa a File API do browser — ver `src/lib/fileUtils.ts`.
+- Estado atual: Fases 0–11 concluídas (classificação de contas, importação de balancetes, DFs). Fase 12 (DFs PDF/DOCX) implementada com arquitetura diferente da planejada — ver `docs/PATTERNS.md` para o estado real.
+- Supabase project-id: `wjccwtpionrorgkozsbr`
+
+## Arquivos de Contexto
+
+Leia estes arquivos antes de trabalhar em qualquer feature:
+
+- `docs/PRD.md` — requisitos e escopo do produto
+- `docs/PLAN.md` — decisões de design + checklist de fases
+- `docs/DATABASE.md` — scripts SQL, convenções de banco, grants obrigatórios
+- `docs/PATTERNS.md` — padrões de código e arquitetura real do projeto
+
+**Sempre leia `docs/PATTERNS.md` antes de implementar qualquer coisa.**
+
+## Manutenção dos Arquivos de Contexto
+
+Sempre que um novo padrão for estabelecido, uma decisão técnica for tomada, ou o estado do projeto mudar, atualizar proativamente os arquivos de contexto relevantes (`docs/PATTERNS.md`, `docs/PLAN.md`, `docs/DATABASE.md`). Não esperar o usuário pedir — esses arquivos são a memória viva do projeto.
+
+## Dependências
+
+Antes de qualquer implementação, verificar se todas as dependências necessárias estão instaladas (`npm ls <pacote>` ou inspecionar `package.json`). Se alguma estiver faltando, informar ao usuário e executar a instalação via `npm install` após confirmação.
 
 ## Segurança
 

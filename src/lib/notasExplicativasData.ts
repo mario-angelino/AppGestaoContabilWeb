@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { NotaVariavel } from './dfUtils'
+import type { NotaWrapper } from './dfUtils'
 
 export const TIPOS_ESPECIAIS = {
   investimento:         'Investimentos',
@@ -303,64 +303,64 @@ export async function clonarNotaParaPeriodo(idNota: number, anoDestino: number, 
   return { ok: true, novaId: nova.id }
 }
 
-// ── Variáveis de notas explicativas ────────────────────────────────────────
+// ── Wrappers de notas explicativas ─────────────────────────────────────────
 
-interface NotaVariavelRaw {
+interface NotaWrapperRaw {
   id: number
   descricao: string
-  nota_variavel_operando: { id_class_nota_explicativa: number; sinal: number }[]
+  nota_wrapper_operando: { id_class_nota_explicativa: number; sinal: number }[]
 }
 
-/** Lista todas as variáveis com seus operandos. */
-export async function fetchNotaVariaveis(): Promise<NotaVariavel[]> {
+/** Lista todos os wrappers com seus operandos. */
+export async function fetchNotaWrappers(): Promise<NotaWrapper[]> {
   const { data, error } = await supabase
-    .from('nota_variavel')
-    .select('id, descricao, nota_variavel_operando(id_class_nota_explicativa, sinal)')
+    .from('nota_wrapper')
+    .select('id, descricao, nota_wrapper_operando(id_class_nota_explicativa, sinal)')
     .order('descricao')
   if (error) throw error
-  const raw = data as unknown as NotaVariavelRaw[]
+  const raw = data as unknown as NotaWrapperRaw[]
   return raw.map(v => ({
     id: v.id,
     descricao: v.descricao,
-    operandos: (v.nota_variavel_operando ?? []).map(op => ({
+    operandos: (v.nota_wrapper_operando ?? []).map(op => ({
       idClassNotaExplicativa: op.id_class_nota_explicativa,
       sinal: op.sinal as 1 | -1,
     })),
   }))
 }
 
-/** IDs de variáveis selecionadas em uma capa de nota. */
-export async function fetchVariaveisSelecionadas(idNota: number): Promise<number[]> {
+/** IDs de wrappers selecionados em uma capa de nota. */
+export async function fetchWrappersSelecionados(idNota: number): Promise<number[]> {
   const { data, error } = await supabase
-    .from('nota_explicativa_bp_dre_variaveis')
-    .select('id_nota_variavel')
+    .from('nota_explicativa_bp_dre_wrappers')
+    .select('id_nota_wrapper')
     .eq('id_nota_explicativa_bp_dre', idNota)
   if (error) throw error
-  return (data as { id_nota_variavel: number }[]).map(r => r.id_nota_variavel)
+  return (data as { id_nota_wrapper: number }[]).map(r => r.id_nota_wrapper)
 }
 
-/** Variáveis selecionadas para múltiplas capas de uma vez (usado na montagem de impressão). */
-export async function fetchVariaveisSelecionadasBatch(
+/** Wrappers selecionados para múltiplas capas de uma vez (usado na montagem de impressão). */
+export async function fetchWrappersSelecionadosBatch(
   idsNota: number[]
-): Promise<{ id_nota_explicativa_bp_dre: number; id_nota_variavel: number }[]> {
+): Promise<{ id_nota_explicativa_bp_dre: number; id_nota_wrapper: number }[]> {
   if (idsNota.length === 0) return []
   const { data, error } = await supabase
-    .from('nota_explicativa_bp_dre_variaveis')
-    .select('id_nota_explicativa_bp_dre, id_nota_variavel')
+    .from('nota_explicativa_bp_dre_wrappers')
+    .select('id_nota_explicativa_bp_dre, id_nota_wrapper')
     .in('id_nota_explicativa_bp_dre', idsNota)
   if (error) throw error
-  return data as { id_nota_explicativa_bp_dre: number; id_nota_variavel: number }[]
+  return data as { id_nota_explicativa_bp_dre: number; id_nota_wrapper: number }[]
 }
 
-/** Substitui as variáveis selecionadas em uma capa de nota. */
-export async function setVariaveisSelecionadas(idNota: number, idsNotaVariavel: number[]): Promise<void> {
+/** Substitui os wrappers selecionados em uma capa de nota. */
+export async function setWrappersSelecionados(idNota: number, idsNotaVariavel: number[]): Promise<void> {
   const { error: delErr } = await supabase
-    .from('nota_explicativa_bp_dre_variaveis')
+    .from('nota_explicativa_bp_dre_wrappers')
     .delete()
     .eq('id_nota_explicativa_bp_dre', idNota)
   if (delErr) throw delErr
   if (idsNotaVariavel.length === 0) return
-  const rows = idsNotaVariavel.map(id => ({ id_nota_explicativa_bp_dre: idNota, id_nota_variavel: id }))
-  const { error: insErr } = await supabase.from('nota_explicativa_bp_dre_variaveis').insert(rows)
+  const rows = idsNotaVariavel.map(id => ({ id_nota_explicativa_bp_dre: idNota, id_nota_wrapper: id }))
+  const { error: insErr } = await supabase.from('nota_explicativa_bp_dre_wrappers').insert(rows)
   if (insErr) throw insErr
 }

@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { fmtMoeda, isAtivoSg, periodoLabel, type NotaQuadro, type NotaVariavel } from '../../lib/dfUtils'
+import { fmtMoeda, isAtivoSg, periodoLabel, type NotaQuadro, type NotaWrapper } from '../../lib/dfUtils'
 import { type DFParams } from '../../lib/dfData'
 import NotaItemDetalheModal from './NotaItemDetalheModal'
-import NotaVariavelDetalheModal from './NotaVariavelDetalheModal'
+import NotaWrapperDetalheModal from './NotaWrapperDetalheModal'
 
 interface NotaQuadroViewProps {
   quadro: NotaQuadro
   params: DFParams
-  variaveis?: NotaVariavel[]
+  wrappers?: NotaWrapper[]
 }
 
 interface Detalhe {
@@ -18,8 +18,8 @@ interface Detalhe {
   planoContasId: number
 }
 
-interface VarDetalhe {
-  variavel: NotaVariavel
+interface WrapperDetalhe {
+  wrapper: NotaWrapper
   idClassSubgrupo: number
   periodoLabel: string
   balanceteId: number
@@ -29,15 +29,15 @@ interface VarDetalhe {
 const CELL_H = 'h-[0.6cm]'
 const SPACER_W = 'w-4'
 
-export default function NotaQuadroView({ quadro, params, variaveis = [] }: NotaQuadroViewProps) {
+export default function NotaQuadroView({ quadro, params, wrappers = [] }: NotaQuadroViewProps) {
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null)
-  const [varDetalhe, setVarDetalhe] = useState<VarDetalhe | null>(null)
+  const [wrapperDetalhe, setWrapperDetalhe] = useState<WrapperDetalhe | null>(null)
   const hasDual = !!params.periodo1
 
-  function openVarDetalhe(idNotaVariavel: number, balanceteId: number, planoContasId: number, pLabel: string) {
-    const variavel = variaveis.find(v => v.id === idNotaVariavel)
-    if (!variavel) return
-    setVarDetalhe({ variavel, idClassSubgrupo: quadro.subgrupo.id, periodoLabel: pLabel, balanceteId, planoContasId })
+  function openWrapperDetalhe(idNotaWrapper: number, balanceteId: number, planoContasId: number, pLabel: string) {
+    const wrapper = wrappers.find(v => v.id === idNotaWrapper)
+    if (!wrapper) return
+    setWrapperDetalhe({ wrapper, idClassSubgrupo: quadro.subgrupo.id, periodoLabel: pLabel, balanceteId, planoContasId })
   }
   const labelFinal = periodoLabel(params.periodo2)
   const labelInicial = params.periodo1 ? periodoLabel(params.periodo1) : ''
@@ -61,14 +61,14 @@ export default function NotaQuadroView({ quadro, params, variaveis = [] }: NotaQ
         )}
         <tbody>
           {quadro.linhas.map(linha => {
-            const rowKey = linha.isVariavel ? `v${linha.idNotaVariavel}` : `i${linha.idClassNotaExplicativa}`
+            const rowKey = linha.isWrapper ? `w${linha.idNotaWrapper}` : `i${linha.idClassNotaExplicativa}`
             return (
               <tr key={rowKey} className="border-b border-gray-50">
                 <td className={`py-1.5 text-gray-700 pl-3 ${CELL_H}`}>{linha.desc_ne}</td>
                 {hasDual && (
                   <>
                     <td className={`py-1.5 text-right font-mono ${CELL_H}`}>
-                      {params.periodo1 && !linha.isVariavel ? (
+                      {params.periodo1 && !linha.isWrapper ? (
                         <button
                           className="text-gray-700 hover:text-blue-700 hover:underline"
                           onClick={() => setDetalhe({
@@ -81,10 +81,10 @@ export default function NotaQuadroView({ quadro, params, variaveis = [] }: NotaQ
                         >
                           {fmtMoeda(linha.saldoInicial ?? 0)}
                         </button>
-                      ) : params.periodo1 && linha.isVariavel && linha.idNotaVariavel != null ? (
+                      ) : params.periodo1 && linha.isWrapper && linha.idNotaWrapper != null ? (
                         <button
                           className="text-gray-700 hover:text-blue-700 hover:underline"
-                          onClick={() => openVarDetalhe(linha.idNotaVariavel!, params.periodo1!.balanceteId, params.periodo1!.planoContasId, periodoLabel(params.periodo1!))}
+                          onClick={() => openWrapperDetalhe(linha.idNotaWrapper!, params.periodo1!.balanceteId, params.periodo1!.planoContasId, periodoLabel(params.periodo1!))}
                         >
                           {fmtMoeda(linha.saldoInicial ?? 0)}
                         </button>
@@ -94,7 +94,7 @@ export default function NotaQuadroView({ quadro, params, variaveis = [] }: NotaQ
                   </>
                 )}
                 <td className={`py-1.5 text-right font-mono ${CELL_H}`}>
-                  {!linha.isVariavel ? (
+                  {!linha.isWrapper ? (
                     <button
                       className="text-gray-700 hover:text-blue-700 hover:underline"
                       onClick={() => setDetalhe({
@@ -107,10 +107,10 @@ export default function NotaQuadroView({ quadro, params, variaveis = [] }: NotaQ
                     >
                       {fmtMoeda(linha.saldoFinal)}
                     </button>
-                  ) : linha.idNotaVariavel != null ? (
+                  ) : linha.idNotaWrapper != null ? (
                     <button
                       className="text-gray-700 hover:text-blue-700 hover:underline"
-                      onClick={() => openVarDetalhe(linha.idNotaVariavel!, params.periodo2.balanceteId, params.periodo2.planoContasId, periodoLabel(params.periodo2))}
+                      onClick={() => openWrapperDetalhe(linha.idNotaWrapper!, params.periodo2.balanceteId, params.periodo2.planoContasId, periodoLabel(params.periodo2))}
                     >
                       {fmtMoeda(linha.saldoFinal)}
                     </button>
@@ -151,14 +151,14 @@ export default function NotaQuadroView({ quadro, params, variaveis = [] }: NotaQ
         />
       )}
 
-      {varDetalhe && (
-        <NotaVariavelDetalheModal
-          variavel={varDetalhe.variavel}
-          idClassSubgrupo={varDetalhe.idClassSubgrupo}
-          periodoLabel={varDetalhe.periodoLabel}
-          balanceteId={varDetalhe.balanceteId}
-          planoContasId={varDetalhe.planoContasId}
-          onClose={() => setVarDetalhe(null)}
+      {wrapperDetalhe && (
+        <NotaWrapperDetalheModal
+          wrapper={wrapperDetalhe.wrapper}
+          idClassSubgrupo={wrapperDetalhe.idClassSubgrupo}
+          periodoLabel={wrapperDetalhe.periodoLabel}
+          balanceteId={wrapperDetalhe.balanceteId}
+          planoContasId={wrapperDetalhe.planoContasId}
+          onClose={() => setWrapperDetalhe(null)}
         />
       )}
     </div>

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import type { NotaVariavel } from '../../lib/dfUtils'
+import type { NotaWrapper } from '../../lib/dfUtils'
 
 function fmtBR(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -16,8 +16,8 @@ interface DetalheRow {
   sinal: 1 | -1
 }
 
-interface NotaVariavelDetalheModalProps {
-  variavel: NotaVariavel
+interface NotaWrapperDetalheModalProps {
+  wrapper: NotaWrapper
   idClassSubgrupo: number
   periodoLabel: string
   balanceteId: number
@@ -25,13 +25,13 @@ interface NotaVariavelDetalheModalProps {
   onClose: () => void
 }
 
-export default function NotaVariavelDetalheModal({
-  variavel, idClassSubgrupo, periodoLabel, balanceteId, planoContasId, onClose,
-}: NotaVariavelDetalheModalProps) {
-  const operandoIds = variavel.operandos.map(op => op.idClassNotaExplicativa)
+export default function NotaWrapperDetalheModal({
+  wrapper, idClassSubgrupo, periodoLabel, balanceteId, planoContasId, onClose,
+}: NotaWrapperDetalheModalProps) {
+  const operandoIds = wrapper.operandos.map(op => op.idClassNotaExplicativa)
 
   const { data: planoItems = [], isLoading: loadingPlano } = useQuery({
-    queryKey: ['nota_var_detalhe_plano', planoContasId, idClassSubgrupo, operandoIds],
+    queryKey: ['nota_wrapper_detalhe_plano', planoContasId, idClassSubgrupo, operandoIds],
     queryFn: async () => {
       const PAGE = 1000
       const all: { conta: string; id_class_nota_explicativa: number; class_nota_explicativa: { desc_ne: string } | null }[] = []
@@ -72,7 +72,7 @@ export default function NotaVariavelDetalheModal({
 
   const rows = useMemo((): DetalheRow[] => {
     const sinalMap = new Map<number, 1 | -1>()
-    for (const op of variavel.operandos) sinalMap.set(op.idClassNotaExplicativa, op.sinal)
+    for (const op of wrapper.operandos) sinalMap.set(op.idClassNotaExplicativa, op.sinal)
 
     const contaInfo = new Map<string, { idNe: number; descNe: string }>()
     for (const pi of planoItems) {
@@ -98,7 +98,7 @@ export default function NotaVariavelDetalheModal({
       })
     }
     return result.sort((a, b) => a.conta.localeCompare(b.conta))
-  }, [planoItems, balItems, variavel.operandos])
+  }, [planoItems, balItems, wrapper.operandos])
 
   const total = rows.reduce((acc, r) => acc + r.saldoEfetivo, 0)
   const loading = loadingPlano || loadingBal
@@ -108,7 +108,7 @@ export default function NotaVariavelDetalheModal({
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <div>
-            <h3 className="font-semibold text-gray-800">Composição — {variavel.descricao}</h3>
+            <h3 className="font-semibold text-gray-800">Composição — {wrapper.descricao}</h3>
             <p className="text-xs text-gray-400 mt-0.5">{periodoLabel} · {rows.length} conta{rows.length !== 1 ? 's' : ''}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
@@ -120,7 +120,7 @@ export default function NotaVariavelDetalheModal({
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
           ) : rows.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-12">Nenhuma conta encontrada para os operandos desta variável.</p>
+            <p className="text-sm text-gray-400 text-center py-12">Nenhuma conta encontrada para os operandos deste wrapper.</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-50 z-10">

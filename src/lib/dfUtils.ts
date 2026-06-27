@@ -50,15 +50,15 @@ export interface CampoCalculado {
   operandos: CampoCalculadoOperando[]
 }
 
-export interface NotaVariavelOperando {
+export interface NotaWrapperOperando {
   idClassNotaExplicativa: number
   sinal: 1 | -1
 }
 
-export interface NotaVariavel {
+export interface NotaWrapper {
   id: number
   descricao: string
-  operandos: NotaVariavelOperando[]
+  operandos: NotaWrapperOperando[]
 }
 
 export interface GrupoVal {
@@ -298,9 +298,9 @@ export function calcularDF(
 // ── Notas explicativas ──────────────────────────────────────────────────────
 
 export interface NotaQuadroLinha {
-  idClassNotaExplicativa?: number  // undefined para linhas de variável
-  idNotaVariavel?: number          // definido para linhas de variável
-  isVariavel?: boolean
+  idClassNotaExplicativa?: number  // undefined para linhas de wrapper
+  idNotaWrapper?: number           // definido para linhas de wrapper
+  isWrapper?: boolean
   desc_ne: string
   saldoFinal: number
   saldoInicial?: number
@@ -348,7 +348,7 @@ export function computeNotaQuadros(
   planoItensInicial?: PlanoItem[],
   bItemsInicial?: { conta: string; saldo_atual: number }[],
   allowedSubgrupoIds?: Set<number>,
-  variaveis?: NotaVariavel[],
+  wrappers?: NotaWrapper[],
   allowedBpDreId?: number
 ): NotaQuadro[] {
   const idsSet = new Set(classNotaExplicativaIds)
@@ -389,26 +389,26 @@ export function computeNotaQuadros(
     quadros.push({ subgrupo: sgInfo.get(sgId)!, linhas, subtotalFinal, subtotalInicial })
   }
 
-  // ── Variáveis ──────────────────────────────────────────────────────────
-  if (variaveis && variaveis.length > 0) {
-    const allVarNeIds = new Set(variaveis.flatMap(v => v.operandos.map(op => op.idClassNotaExplicativa)))
-    const saldoFinalV = somarPorSubgrupoNota(allVarNeIds, planoItensFinal, bItemsFinal, allowedBpDreId)
+  // ── Wrappers ───────────────────────────────────────────────────────────
+  if (wrappers && wrappers.length > 0) {
+    const allWrapperNeIds = new Set(wrappers.flatMap(v => v.operandos.map(op => op.idClassNotaExplicativa)))
+    const saldoFinalV = somarPorSubgrupoNota(allWrapperNeIds, planoItensFinal, bItemsFinal, allowedBpDreId)
     const saldoInicialV = hasInicial
-      ? somarPorSubgrupoNota(allVarNeIds, planoItensInicial!, bItemsInicial!, allowedBpDreId)
+      ? somarPorSubgrupoNota(allWrapperNeIds, planoItensInicial!, bItemsInicial!, allowedBpDreId)
       : new Map<string, number>()
 
-    // subgrupos relevantes para as variáveis
-    const sgInfoV = new Map<number, SubgrupoVal>()
+    // subgrupos relevantes para os wrappers
+    const sgInfoWrapper = new Map<number, SubgrupoVal>()
     for (const pi of [...planoItensFinal, ...(planoItensInicial ?? [])]) {
-      if (pi.id_class_nota_explicativa == null || !allVarNeIds.has(pi.id_class_nota_explicativa)) continue
+      if (pi.id_class_nota_explicativa == null || !allWrapperNeIds.has(pi.id_class_nota_explicativa)) continue
       if (pi.id_class_subgrupo == null || !pi.class_subgrupo) continue
       if (allowedSubgrupoIds && !allowedSubgrupoIds.has(pi.id_class_subgrupo)) continue
       if (allowedBpDreId != null && pi.id_class_bp_dre !== allowedBpDreId) continue
-      sgInfoV.set(pi.id_class_subgrupo, pi.class_subgrupo)
+      sgInfoWrapper.set(pi.id_class_subgrupo, pi.class_subgrupo)
     }
 
-    for (const v of variaveis) {
-      for (const [sgId, sg] of sgInfoV) {
+    for (const v of wrappers) {
+      for (const [sgId, sg] of sgInfoWrapper) {
         let sf = 0
         let si = 0
         for (const op of v.operandos) {
@@ -424,8 +424,8 @@ export function computeNotaQuadros(
           quadros.push(quadro)
         }
         quadro.linhas.push({
-          idNotaVariavel: v.id,
-          isVariavel: true,
+          idNotaWrapper: v.id,
+          isWrapper: true,
           desc_ne: v.descricao,
           saldoFinal: sf,
           ...(hasInicial ? { saldoInicial: si } : {}),

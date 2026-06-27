@@ -38,7 +38,16 @@ Antes de qualquer implementação, verificar se todas as dependências necessár
 
 ## Supabase
 
-- Ao regenerar `src/lib/database.types.ts`, usar obrigatoriamente `| Out-File -Encoding utf8` em vez de `>` para evitar encoding UTF-16 LE que quebra o build no Netlify:
+- Ao regenerar `src/lib/database.types.ts`, usar o **padrão seguro** abaixo — o CLI do Supabase escreve erros no stdout, então um pipe direto destrói o arquivo se o comando falhar. Sempre capturar em variável, validar e só então escrever:
   ```powershell
-  npx supabase@latest gen types typescript --project-id wjccwtpionrorgkozsbr | Out-File -Encoding utf8 src/lib/database.types.ts
+  $types = npx supabase@latest gen types typescript --project-id wjccwtpionrorgkozsbr
+  if ($types -match '^export type') {
+    $types | Out-File -Encoding utf8 src/lib/database.types.ts
+    Write-Host "Types gerados com sucesso."
+  } else {
+    Write-Error "Falha na geração — arquivo original preservado."
+    $types | Select-Object -First 3
+  }
   ```
+- Se não estiver autenticado, o usuário deve abrir um terminal PowerShell e rodar `npx supabase@latest login` antes de gerar os tipos.
+- Nunca usar a ferramenta `Bash` para este comando — usar somente `PowerShell`.

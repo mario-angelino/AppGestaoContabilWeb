@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { StickyNote, Search, Save, Plus, Pencil, X, Copy, Building2, Trash2, Printer, AlertTriangle } from 'lucide-react'
-import { computeNotaQuadros, MESES, type PlanoItem, type BpDreSubgrupoLink, type NotaVariavel } from '../../lib/dfUtils'
+import { computeNotaQuadros, MESES, type PlanoItem, type BpDreSubgrupoLink, type NotaWrapper } from '../../lib/dfUtils'
 import { fetchBalanceteItens, fetchPlanoItens, fetchLinks, type DFParams, type BalanceteItem } from '../../lib/dfData'
 import {
   fetchNotasExplicativasBpDre, fetchNotaItens, fetchClassNotasExplicativas, fetchClassBpDres,
   saveNotaCampos, upsertNotaExplicativaBpDre, criarNotaTexto, criarNotaEspecial, setNotaItens,
   fetchPeriodosDisponiveis, clonarNotaParaPeriodo, fetchEmpresasAtivas, excluirNotaExplicativaBpDre,
-  fetchNotaVariaveis, fetchVariaveisSelecionadas, fetchVariaveisSelecionadasBatch, setVariaveisSelecionadas,
+  fetchNotaWrappers, fetchWrappersSelecionados, fetchWrappersSelecionadosBatch, setWrappersSelecionados,
   TIPOS_ESPECIAIS,
   type TipoNotaEspecial,
   type NotaExplicativaBpDre, type NotaExplicativaBpDreItem, type ClassNotaExplicativaOpt, type ClassBpDreOpt,
@@ -152,23 +152,23 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
     queryFn: fetchLinks,
   })
 
-  const { data: variaveis = [] } = useQuery({
-    queryKey: ['nota_variavel'],
-    queryFn: fetchNotaVariaveis,
+  const { data: wrappers = [] } = useQuery({
+    queryKey: ['nota_wrapper'],
+    queryFn: fetchNotaWrappers,
   })
 
-  const { data: varSelBatch = [] } = useQuery({
-    queryKey: ['nota_variaveis_selecionadas_batch', idsNota],
-    queryFn: () => fetchVariaveisSelecionadasBatch(idsNota),
+  const { data: wrapperSelBatch = [] } = useQuery({
+    queryKey: ['nota_wrappers_selecionados_batch', idsNota],
+    queryFn: () => fetchWrappersSelecionadosBatch(idsNota),
     enabled: idsNota.length > 0,
   })
 
-  // notaId → Set<variavelId>
-  const varSelPorNota = new Map<number, Set<number>>()
-  for (const row of varSelBatch) {
-    if (!varSelPorNota.has(row.id_nota_explicativa_bp_dre))
-      varSelPorNota.set(row.id_nota_explicativa_bp_dre, new Set())
-    varSelPorNota.get(row.id_nota_explicativa_bp_dre)!.add(row.id_nota_variavel)
+  // notaId → Set<wrapperId>
+  const wrapperSelPorNota = new Map<number, Set<number>>()
+  for (const row of wrapperSelBatch) {
+    if (!wrapperSelPorNota.has(row.id_nota_explicativa_bp_dre))
+      wrapperSelPorNota.set(row.id_nota_explicativa_bp_dre, new Set())
+    wrapperSelPorNota.get(row.id_nota_explicativa_bp_dre)!.add(row.id_nota_wrapper)
   }
 
   const [novaCapaId, setNovaCapaId] = useState<number | ''>('')
@@ -200,15 +200,15 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
     const allowedSubgrupoIds = new Set(
       links.filter(l => l.id_class_bp_dre === nota.id_class_bp_dre).map(l => l.id_class_subgrupo)
     )
-    const varIdsSelecionadas = varSelPorNota.get(nota.id) ?? new Set<number>()
-    const variadeisDaNota = variaveis.filter(v => varIdsSelecionadas.has(v.id))
+    const wrapperIdsSelecionados = wrapperSelPorNota.get(nota.id) ?? new Set<number>()
+    const wrappersDaNota = wrappers.filter(v => wrapperIdsSelecionados.has(v.id))
     const quadros = nota.tipo === 'quadro'
       ? computeNotaQuadros(
           itensPorNota.get(nota.id) ?? [],
           planoItensFinal, bItemsFinal,
           planoItensInicial, bItemsInicial,
           allowedSubgrupoIds,
-          variadeisDaNota,
+          wrappersDaNota,
           nota.id_class_bp_dre ?? undefined,
         )
       : []
@@ -268,6 +268,8 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['notas_explicativas'] })
     queryClient.invalidateQueries({ queryKey: ['notas_explicativas_itens'] })
+    queryClient.invalidateQueries({ queryKey: ['nota_wrappers_selecionados_batch'] })
+    queryClient.invalidateQueries({ queryKey: ['nota_wrappers_selecionados'] })
   }
 
   if (loadingNotas) {
@@ -453,7 +455,7 @@ function NotasContent({ resultado }: { resultado: Resultado }) {
           nota={notaEditando}
           itensVinculados={itens.filter(i => i.id_nota_explicativa_bp_dre === notaEditando.id)}
           classNotas={classNotas}
-          variaveis={variaveis}
+          wrappers={wrappers}
           links={links}
           planoItensFinal={planoItensFinal}
           bItemsFinal={bItemsFinal}
@@ -694,7 +696,7 @@ interface NotaCardProps {
   nota: NotaExplicativaBpDre
   itensVinculados: NotaExplicativaBpDreItem[]
   classNotas: ClassNotaExplicativaOpt[]
-  variaveis: NotaVariavel[]
+  wrappers: NotaWrapper[]
   links: BpDreSubgrupoLink[]
   planoItensFinal: PlanoItem[]
   bItemsFinal: BalanceteItem[]
@@ -706,7 +708,7 @@ interface NotaCardProps {
 }
 
 function NotaCard({
-  nota, itensVinculados, classNotas, variaveis, links, planoItensFinal, bItemsFinal, planoItensInicial, bItemsInicial, params, onSaved, onClose,
+  nota, itensVinculados, classNotas, wrappers, links, planoItensFinal, bItemsFinal, planoItensInicial, bItemsInicial, params, onSaved, onClose,
 }: NotaCardProps) {
   const isTexto = nota.tipo === 'texto'
   const isQuadro = nota.tipo === 'quadro'
@@ -721,13 +723,13 @@ function NotaCard({
   const [salvando, setSalvando] = useState(false)
   const [dirty, setDirty] = useState(false)
 
-  const { data: varSelecionadasInit = [] } = useQuery({
-    queryKey: ['nota_variaveis_selecionadas', nota.id],
-    queryFn: () => fetchVariaveisSelecionadas(nota.id),
+  const { data: wrappersSelecionadosInit = [] } = useQuery({
+    queryKey: ['nota_wrappers_selecionados', nota.id],
+    queryFn: () => fetchWrappersSelecionados(nota.id),
     enabled: isQuadro,
   })
-  const [selecionadosVar, setSelecionadosVar] = useState<Set<number> | null>(null)
-  const varSelecionadas: Set<number> = selecionadosVar ?? new Set(varSelecionadasInit)
+  const [selecionadosWrapper, setSelecionadosWrapper] = useState<Set<number> | null>(null)
+  const wrappersSelecionados: Set<number> = selecionadosWrapper ?? new Set(wrappersSelecionadosInit)
 
   function toggleItem(id: number) {
     setSelecionados(prev => {
@@ -739,9 +741,9 @@ function NotaCard({
     setDirty(true)
   }
 
-  function toggleVariavel(id: number) {
-    setSelecionadosVar(prev => {
-      const base = prev ?? new Set(varSelecionadasInit)
+  function toggleWrapper(id: number) {
+    setSelecionadosWrapper(prev => {
+      const base = prev ?? new Set(wrappersSelecionadosInit)
       const next = new Set(base)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -750,11 +752,11 @@ function NotaCard({
     setDirty(true)
   }
 
-  // Guardrail: class_ne individuais selecionadas que pertencem a alguma variável selecionada
+  // Guardrail: class_ne individuais selecionadas que pertencem a algum wrapper selecionado
   const guardrailItems = isQuadro ? (() => {
     const result: { desc_ne: string; nomeVar: string }[] = []
-    for (const v of variaveis) {
-      if (!varSelecionadas.has(v.id)) continue
+    for (const v of wrappers) {
+      if (!wrappersSelecionados.has(v.id)) continue
       for (const op of v.operandos) {
         if (selecionados.has(op.idClassNotaExplicativa)) {
           const desc = classNotas.find(c => c.id === op.idClassNotaExplicativa)?.desc_ne ?? String(op.idClassNotaExplicativa)
@@ -774,7 +776,7 @@ function NotaCard({
       ]
       if (!isTexto) {
         promises.push(setNotaItens(nota.id, Array.from(selecionados)))
-        promises.push(setVariaveisSelecionadas(nota.id, Array.from(varSelecionadas)))
+        promises.push(setWrappersSelecionados(nota.id, Array.from(wrappersSelecionados)))
       }
       await Promise.all(promises)
       setDirty(false)
@@ -788,7 +790,7 @@ function NotaCard({
     links.filter(l => l.id_class_bp_dre === nota.id_class_bp_dre).map(l => l.id_class_subgrupo)
   )
 
-  const variadeisSelecionadasFiltradas = variaveis.filter(v => varSelecionadas.has(v.id))
+  const wrappersSelecionadosFiltrados = wrappers.filter(v => wrappersSelecionados.has(v.id))
 
   const quadros = isQuadro ? computeNotaQuadros(
     Array.from(selecionados),
@@ -797,7 +799,7 @@ function NotaCard({
     planoItensInicial,
     bItemsInicial,
     allowedSubgrupoIds,
-    variadeisSelecionadasFiltradas,
+    wrappersSelecionadosFiltrados,
     nota.id_class_bp_dre ?? undefined,
   ) : []
 
@@ -856,15 +858,15 @@ function NotaCard({
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Itens vinculados</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-3">
-              {variaveis.length > 0 && (
+              {wrappers.length > 0 && (
                 <>
-                  <p className="col-span-full text-xs font-semibold text-indigo-600 uppercase tracking-wider mt-0.5 mb-0.5">Variáveis</p>
-                  {variaveis.map(v => (
-                    <label key={`var-${v.id}`} className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                  <p className="col-span-full text-xs font-semibold text-indigo-600 uppercase tracking-wider mt-0.5 mb-0.5">Wrappers</p>
+                  {wrappers.map(v => (
+                    <label key={`wrapper-${v.id}`} className="flex items-center gap-2 text-sm cursor-pointer select-none">
                       <input
                         type="checkbox"
-                        checked={varSelecionadas.has(v.id)}
-                        onChange={() => toggleVariavel(v.id)}
+                        checked={wrappersSelecionados.has(v.id)}
+                        onChange={() => toggleWrapper(v.id)}
                         className="w-4 h-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-indigo-700 font-medium">{v.descricao}</span>
@@ -884,7 +886,7 @@ function NotaCard({
                   <span className="text-gray-700">{c.desc_ne}</span>
                 </label>
               ))}
-              {classNotas.length === 0 && variaveis.length === 0 && (
+              {classNotas.length === 0 && wrappers.length === 0 && (
                 <p className="text-xs text-gray-400 col-span-full">Nenhum item de nota explicativa cadastrado.</p>
               )}
             </div>
@@ -899,7 +901,7 @@ function NotaCard({
                 <ul className="list-disc list-inside space-y-0.5 text-xs">
                   {guardrailItems.map((g, i) => (
                     <li key={i}>
-                      <span className="font-medium">{g.desc_ne}</span> pertence à variável <span className="font-medium">{g.nomeVar}</span> — o valor pode aparecer duplicado no quadro.
+                      <span className="font-medium">{g.desc_ne}</span> pertence ao wrapper <span className="font-medium">{g.nomeVar}</span> — o valor pode aparecer duplicado no quadro.
                     </li>
                   ))}
                 </ul>
@@ -914,7 +916,7 @@ function NotaCard({
           {quadros.length > 0 ? (
             <div className="space-y-4">
               {quadros.map(q => (
-                <NotaQuadroView key={q.subgrupo.id} quadro={q} params={params} variaveis={variadeisSelecionadasFiltradas} />
+                <NotaQuadroView key={q.subgrupo.id} quadro={q} params={params} wrappers={wrappersSelecionadosFiltrados} />
               ))}
               <ResumoAtivoPassivo quadros={quadros} params={params} />
             </div>

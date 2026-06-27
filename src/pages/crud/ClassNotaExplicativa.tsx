@@ -17,16 +17,16 @@ const fields: FieldDef[] = [
   { name: 'desc_ne', label: 'Descrição', type: 'text', required: true, placeholder: 'ex: Caixa e Equivalentes' }
 ]
 
-interface VariavelOperandoRaw {
+interface WrapperOperandoRaw {
   id: number
   id_class_nota_explicativa: number
   sinal: number
 }
 
-interface VariavelRaw {
+interface WrapperRaw {
   id: number
   descricao: string
-  nota_variavel_operando: VariavelOperandoRaw[]
+  nota_wrapper_operando: WrapperOperandoRaw[]
 }
 
 interface OperandoLocal {
@@ -35,7 +35,7 @@ interface OperandoLocal {
   label: string
 }
 
-interface VariavelModalState {
+interface WrapperModalState {
   open: boolean
   editId: number | null
   descricao: string
@@ -46,17 +46,17 @@ interface VariavelModalState {
   error: string
 }
 
-const VAR_MODAL_INIT: VariavelModalState = {
+const WRAPPER_MODAL_INIT: WrapperModalState = {
   open: false, editId: null, descricao: '', operandos: [],
   addRefId: '', addSinal: '1', saving: false, error: '',
 }
 
 export default function ClassNotaExplicativa(): JSX.Element {
   const qc = useQueryClient()
-  const [showVariaveis, setShowVariaveis] = useState(false)
-  const [varModal, setVarModal] = useState<VariavelModalState>(VAR_MODAL_INIT)
-  const [deleteVarId, setDeleteVarId] = useState<number | null>(null)
-  const [deletingVar, setDeletingVar] = useState(false)
+  const [showWrappers, setShowWrappers] = useState(false)
+  const [wrapperModal, setWrapperModal] = useState<WrapperModalState>(WRAPPER_MODAL_INIT)
+  const [deleteWrapperId, setDeleteWrapperId] = useState<number | null>(null)
+  const [deletingWrapper, setDeletingWrapper] = useState(false)
 
   const { data = [], isLoading } = useQuery({
     queryKey: ['class_nota_explicativa'],
@@ -67,15 +67,15 @@ export default function ClassNotaExplicativa(): JSX.Element {
     }
   })
 
-  const { data: variaveisList = [] } = useQuery({
-    queryKey: ['nota_variavel'],
+  const { data: wrappersList = [] } = useQuery({
+    queryKey: ['nota_wrapper'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('nota_variavel')
-        .select('id, descricao, nota_variavel_operando(id, id_class_nota_explicativa, sinal)')
+        .from('nota_wrapper')
+        .select('id, descricao, nota_wrapper_operando(id, id_class_nota_explicativa, sinal)')
         .order('descricao')
       if (error) throw error
-      return data as unknown as VariavelRaw[]
+      return data as unknown as WrapperRaw[]
     }
   })
 
@@ -103,78 +103,78 @@ export default function ClassNotaExplicativa(): JSX.Element {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['class_nota_explicativa'] })
   })
 
-  // ── Variáveis ─────────────────────────────────────────────────────────────
+  // ── Wrappers ───────────────────────────────────────────────────────────────
 
-  const openAddVar = () => setVarModal({ ...VAR_MODAL_INIT, open: true })
+  const openAddWrapper = () => setWrapperModal({ ...WRAPPER_MODAL_INIT, open: true })
 
-  const openEditVar = (v: VariavelRaw) => {
-    const ops: OperandoLocal[] = v.nota_variavel_operando.map(op => ({
+  const openEditWrapper = (v: WrapperRaw) => {
+    const ops: OperandoLocal[] = v.nota_wrapper_operando.map(op => ({
       refId: op.id_class_nota_explicativa,
       sinal: op.sinal as 1 | -1,
       label: data.find(ne => ne.id === op.id_class_nota_explicativa)?.desc_ne ?? String(op.id_class_nota_explicativa),
     }))
-    setVarModal({ ...VAR_MODAL_INIT, open: true, editId: v.id, descricao: v.descricao, operandos: ops })
+    setWrapperModal({ ...WRAPPER_MODAL_INIT, open: true, editId: v.id, descricao: v.descricao, operandos: ops })
   }
 
-  const closeVarModal = () => setVarModal(VAR_MODAL_INIT)
+  const closeWrapperModal = () => setWrapperModal(WRAPPER_MODAL_INIT)
 
   const addOperando = () => {
-    if (!varModal.addRefId) return
-    const refId = Number(varModal.addRefId)
-    if (varModal.operandos.some(op => op.refId === refId)) return
+    if (!wrapperModal.addRefId) return
+    const refId = Number(wrapperModal.addRefId)
+    if (wrapperModal.operandos.some(op => op.refId === refId)) return
     const label = data.find(ne => ne.id === refId)?.desc_ne ?? String(refId)
-    setVarModal(m => ({ ...m, operandos: [...m.operandos, { refId, sinal: Number(m.addSinal) as 1 | -1, label }], addRefId: '', addSinal: '1' }))
+    setWrapperModal(m => ({ ...m, operandos: [...m.operandos, { refId, sinal: Number(m.addSinal) as 1 | -1, label }], addRefId: '', addSinal: '1' }))
   }
 
   const removeOperando = (i: number) =>
-    setVarModal(m => ({ ...m, operandos: m.operandos.filter((_, idx) => idx !== i) }))
+    setWrapperModal(m => ({ ...m, operandos: m.operandos.filter((_, idx) => idx !== i) }))
 
-  const handleSaveVar = async () => {
-    if (!varModal.descricao.trim()) {
-      setVarModal(m => ({ ...m, error: 'Descrição é obrigatória.' }))
+  const handleSaveWrapper = async () => {
+    if (!wrapperModal.descricao.trim()) {
+      setWrapperModal(m => ({ ...m, error: 'Descrição é obrigatória.' }))
       return
     }
-    setVarModal(m => ({ ...m, saving: true, error: '' }))
+    setWrapperModal(m => ({ ...m, saving: true, error: '' }))
     try {
-      let varId = varModal.editId
+      let varId = wrapperModal.editId
       if (varId) {
-        const { error } = await supabase.from('nota_variavel').update({ descricao: varModal.descricao.trim() }).eq('id', varId)
+        const { error } = await supabase.from('nota_wrapper').update({ descricao: wrapperModal.descricao.trim() }).eq('id', varId)
         if (error) throw new Error(error.message)
-        const { error: delErr } = await supabase.from('nota_variavel_operando').delete().eq('id_nota_variavel', varId)
+        const { error: delErr } = await supabase.from('nota_wrapper_operando').delete().eq('id_nota_wrapper', varId)
         if (delErr) throw new Error(delErr.message)
       } else {
-        const { data: ins, error } = await supabase.from('nota_variavel').insert({ descricao: varModal.descricao.trim() }).select('id').single()
+        const { data: ins, error } = await supabase.from('nota_wrapper').insert({ descricao: wrapperModal.descricao.trim() }).select('id').single()
         if (error) throw new Error(error.message)
         varId = ins.id
       }
-      if (varModal.operandos.length > 0) {
-        const rows = varModal.operandos.map(op => ({ id_nota_variavel: varId, id_class_nota_explicativa: op.refId, sinal: op.sinal }))
-        const { error } = await supabase.from('nota_variavel_operando').insert(rows)
+      if (wrapperModal.operandos.length > 0) {
+        const rows = wrapperModal.operandos.map(op => ({ id_nota_wrapper: varId, id_class_nota_explicativa: op.refId, sinal: op.sinal }))
+        const { error } = await supabase.from('nota_wrapper_operando').insert(rows)
         if (error) throw new Error(error.message)
       }
-      qc.invalidateQueries({ queryKey: ['nota_variavel'] })
-      closeVarModal()
+      qc.invalidateQueries({ queryKey: ['nota_wrapper'] })
+      closeWrapperModal()
     } catch (err) {
-      setVarModal(m => ({ ...m, saving: false, error: err instanceof Error ? err.message : 'Erro ao salvar.' }))
+      setWrapperModal(m => ({ ...m, saving: false, error: err instanceof Error ? err.message : 'Erro ao salvar.' }))
     }
   }
 
-  const handleDeleteVar = async () => {
-    if (!deleteVarId) return
-    setDeletingVar(true)
+  const handleDeleteWrapper = async () => {
+    if (!deleteWrapperId) return
+    setDeletingWrapper(true)
     try {
-      const { error } = await supabase.from('nota_variavel').delete().eq('id', deleteVarId)
+      const { error } = await supabase.from('nota_wrapper').delete().eq('id', deleteWrapperId)
       if (error) throw error
-      qc.invalidateQueries({ queryKey: ['nota_variavel'] })
-      setDeleteVarId(null)
+      qc.invalidateQueries({ queryKey: ['nota_wrapper'] })
+      setDeleteWrapperId(null)
     } finally {
-      setDeletingVar(false)
+      setDeletingWrapper(false)
     }
   }
 
   const availableNeOps = useMemo(
-    () => data.filter(ne => !varModal.operandos.some(op => op.refId === ne.id)),
-    [data, varModal.operandos]
+    () => data.filter(ne => !wrapperModal.operandos.some(op => op.refId === ne.id)),
+    [data, wrapperModal.operandos]
   )
 
   return (
@@ -190,29 +190,29 @@ export default function ClassNotaExplicativa(): JSX.Element {
         onDelete={(id) => remove.mutateAsync(id as number)}
         extraHeaderAction={
           <button
-            onClick={() => setShowVariaveis(v => !v)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${showVariaveis ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+            onClick={() => setShowWrappers(v => !v)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${showWrappers ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
           >
             <Layers size={15} />
-            Variáveis
+            Wrappers
           </button>
         }
       />
 
-      {/* Seção Variáveis */}
-      {showVariaveis && (
+      {/* Seção Wrappers */}
+      {showWrappers && (
         <div className="mt-8">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-indigo-800 flex items-center gap-2">
               <Layers size={16} />
-              Variáveis
+              Wrappers
             </h3>
             <button
-              onClick={openAddVar}
+              onClick={openAddWrapper}
               className="flex items-center gap-2 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
             >
               <Plus size={13} />
-              Nova variável
+              Novo wrapper
             </button>
           </div>
 
@@ -226,16 +226,16 @@ export default function ClassNotaExplicativa(): JSX.Element {
                 </tr>
               </thead>
               <tbody>
-                {variaveisList.length === 0 ? (
+                {wrappersList.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="text-center py-10 text-gray-400 text-sm">Nenhuma variável cadastrada.</td>
+                    <td colSpan={3} className="text-center py-10 text-gray-400 text-sm">Nenhum wrapper cadastrado.</td>
                   </tr>
                 ) : (
-                  variaveisList.map((v, i) => (
-                    <tr key={v.id} className={`hover:bg-gray-50 ${i < variaveisList.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                  wrappersList.map((v, i) => (
+                    <tr key={v.id} className={`hover:bg-gray-50 ${i < wrappersList.length - 1 ? 'border-b border-gray-50' : ''}`}>
                       <td className="px-4 py-3 text-gray-800 font-medium">{v.descricao}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">
-                        {v.nota_variavel_operando.map((op, idx) => {
+                        {v.nota_wrapper_operando.map((op, idx) => {
                           const sinal = idx === 0 ? '' : op.sinal === 1 ? ' + ' : ' − '
                           const label = data.find(ne => ne.id === op.id_class_nota_explicativa)?.desc_ne ?? `#${op.id_class_nota_explicativa}`
                           return <span key={op.id}>{sinal}{label}</span>
@@ -243,10 +243,10 @@ export default function ClassNotaExplicativa(): JSX.Element {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => openEditVar(v)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Editar">
+                          <button onClick={() => openEditWrapper(v)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Editar">
                             <Pencil size={14} />
                           </button>
-                          <button onClick={() => setDeleteVarId(v.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Excluir">
+                          <button onClick={() => setDeleteWrapperId(v.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Excluir">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -260,15 +260,15 @@ export default function ClassNotaExplicativa(): JSX.Element {
         </div>
       )}
 
-      {/* Modal Variável */}
-      {varModal.open && (
+      {/* Modal Wrapper */}
+      {wrapperModal.open && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
               <h3 className="font-semibold text-gray-800">
-                {varModal.editId ? 'Editar Variável' : 'Nova Variável'}
+                {wrapperModal.editId ? 'Editar Wrapper' : 'Novo Wrapper'}
               </h3>
-              <button onClick={closeVarModal} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+              <button onClick={closeWrapperModal} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
@@ -276,8 +276,8 @@ export default function ClassNotaExplicativa(): JSX.Element {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Descrição <span className="text-red-500">*</span></label>
                 <input
                   type="text"
-                  value={varModal.descricao}
-                  onChange={e => setVarModal(m => ({ ...m, descricao: e.target.value }))}
+                  value={wrapperModal.descricao}
+                  onChange={e => setWrapperModal(m => ({ ...m, descricao: e.target.value }))}
                   placeholder="ex: Disponibilidades"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
@@ -285,11 +285,11 @@ export default function ClassNotaExplicativa(): JSX.Element {
 
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Notas Explicativas incluídas</p>
-                {varModal.operandos.length === 0 ? (
+                {wrapperModal.operandos.length === 0 ? (
                   <p className="text-xs text-gray-400 mb-3">Nenhuma nota adicionada.</p>
                 ) : (
                   <div className="space-y-1.5 mb-3">
-                    {varModal.operandos.map((op, i) => (
+                    {wrapperModal.operandos.map((op, i) => (
                       <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
                         <span className={`text-xs font-bold w-5 ${op.sinal === 1 ? 'text-green-600' : 'text-red-600'}`}>
                           {op.sinal === 1 ? '+' : '−'}
@@ -305,8 +305,8 @@ export default function ClassNotaExplicativa(): JSX.Element {
                   <div className="w-24">
                     <label className="block text-xs text-gray-500 mb-1">Sinal</label>
                     <select
-                      value={varModal.addSinal}
-                      onChange={e => setVarModal(m => ({ ...m, addSinal: e.target.value as '1' | '-1' }))}
+                      value={wrapperModal.addSinal}
+                      onChange={e => setWrapperModal(m => ({ ...m, addSinal: e.target.value as '1' | '-1' }))}
                       className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="1">+ (soma)</option>
@@ -316,8 +316,8 @@ export default function ClassNotaExplicativa(): JSX.Element {
                   <div className="flex-1">
                     <label className="block text-xs text-gray-500 mb-1">Nota Explicativa</label>
                     <select
-                      value={varModal.addRefId}
-                      onChange={e => setVarModal(m => ({ ...m, addRefId: e.target.value }))}
+                      value={wrapperModal.addRefId}
+                      onChange={e => setWrapperModal(m => ({ ...m, addRefId: e.target.value }))}
                       className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="">— selecione —</option>
@@ -326,7 +326,7 @@ export default function ClassNotaExplicativa(): JSX.Element {
                   </div>
                   <button
                     onClick={addOperando}
-                    disabled={!varModal.addRefId}
+                    disabled={!wrapperModal.addRefId}
                     className="flex items-center gap-1.5 bg-gray-100 text-gray-700 rounded-lg px-3 py-1.5 text-sm hover:bg-gray-200 transition-colors disabled:opacity-40"
                   >
                     <Plus size={13} />
@@ -335,31 +335,31 @@ export default function ClassNotaExplicativa(): JSX.Element {
                 </div>
               </div>
 
-              {varModal.error && (
-                <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{varModal.error}</p>
+              {wrapperModal.error && (
+                <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{wrapperModal.error}</p>
               )}
             </div>
 
             <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end flex-shrink-0">
-              <button onClick={closeVarModal} className="border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm hover:bg-gray-50 transition-colors">Cancelar</button>
-              <button onClick={handleSaveVar} disabled={varModal.saving} className="bg-indigo-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                {varModal.saving ? 'Salvando...' : 'Salvar'}
+              <button onClick={closeWrapperModal} className="border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm hover:bg-gray-50 transition-colors">Cancelar</button>
+              <button onClick={handleSaveWrapper} disabled={wrapperModal.saving} className="bg-indigo-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                {wrapperModal.saving ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Confirmação exclusão variável */}
-      {deleteVarId !== null && (
+      {/* Confirmação exclusão wrapper */}
+      {deleteWrapperId !== null && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
             <h3 className="font-semibold text-gray-800 mb-2">Confirmar exclusão</h3>
-            <p className="text-sm text-gray-500 mb-6">A variável e todos os seus operandos serão removidos.</p>
+            <p className="text-sm text-gray-500 mb-6">O wrapper e todos os seus operandos serão removidos.</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteVarId(null)} className="flex-1 border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm hover:bg-gray-50 transition-colors">Cancelar</button>
-              <button onClick={handleDeleteVar} disabled={deletingVar} className="flex-1 bg-red-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">
-                {deletingVar ? 'Excluindo...' : 'Excluir'}
+              <button onClick={() => setDeleteWrapperId(null)} className="flex-1 border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm hover:bg-gray-50 transition-colors">Cancelar</button>
+              <button onClick={handleDeleteWrapper} disabled={deletingWrapper} className="flex-1 bg-red-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">
+                {deletingWrapper ? 'Excluindo...' : 'Excluir'}
               </button>
             </div>
           </div>

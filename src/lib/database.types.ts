@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -61,6 +61,13 @@ export type Database = {
             referencedRelation: "vw_empresas_planocontas_vigencia"
             referencedColumns: ["vigencia_id"]
           },
+          {
+            foreignKeyName: "balancete_vigencia_id_fkey"
+            columns: ["vigencia_id"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["vigencia_id"]
+          },
         ]
       }
       balancete_itens: {
@@ -104,6 +111,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "balancete"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "balancete_itens_balancete_id_fkey"
+            columns: ["balancete_id"]
+            isOneToOne: false
+            referencedRelation: "vw_balancete_periodo"
+            referencedColumns: ["balancete_id"]
           },
           {
             foreignKeyName: "balancete_itens_balancete_id_fkey"
@@ -160,11 +174,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "class_bp_dre_subgrupo_id_class_bp_dre_fkey"
+            columns: ["id_class_bp_dre"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["bp_dre_id"]
+          },
+          {
             foreignKeyName: "class_bp_dre_subgrupo_id_class_subgrupo_fkey"
             columns: ["id_class_subgrupo"]
             isOneToOne: false
             referencedRelation: "class_subgrupo"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_bp_dre_subgrupo_id_class_subgrupo_fkey"
+            columns: ["id_class_subgrupo"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["subgrupo_id"]
           },
         ]
       }
@@ -255,23 +283,33 @@ export type Database = {
             referencedRelation: "class_grupo"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "class_subgrupo_id_class_grupo_fkey"
+            columns: ["id_class_grupo"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["grupo_id"]
+          },
         ]
       }
       df_campo_calculado: {
         Row: {
           created_at: string | null
+          fl_indentado: boolean
           id: number
           nome: string
           tipo_df: string
         }
         Insert: {
           created_at?: string | null
+          fl_indentado?: boolean
           id?: number
           nome: string
           tipo_df: string
         }
         Update: {
           created_at?: string | null
+          fl_indentado?: boolean
           id?: number
           nome?: string
           tipo_df?: string
@@ -322,6 +360,13 @@ export type Database = {
             referencedRelation: "class_bp_dre"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "df_campo_calculado_operando_id_class_bp_dre_fkey"
+            columns: ["id_class_bp_dre"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["bp_dre_id"]
+          },
         ]
       }
       empresa: {
@@ -334,6 +379,7 @@ export type Database = {
           fl_controlada: boolean | null
           fl_controladora: boolean | null
           id: number
+          nome_logo: string | null
           razao_social: string
         }
         Insert: {
@@ -345,6 +391,7 @@ export type Database = {
           fl_controlada?: boolean | null
           fl_controladora?: boolean | null
           id?: number
+          nome_logo?: string | null
           razao_social: string
         }
         Update: {
@@ -356,52 +403,53 @@ export type Database = {
           fl_controlada?: boolean | null
           fl_controladora?: boolean | null
           id?: number
+          nome_logo?: string | null
           razao_social?: string
         }
         Relationships: []
       }
       nota_explicativa_bp_dre: {
         Row: {
+          ano: number
+          created_at: string | null
           id: number
           id_class_bp_dre: number | null
           id_empresa: number
-          ano: number
           mes: number
-          tipo: string
-          titulo: string | null
           numero_nota: number | null
           texto_antes: string | null
           texto_depois: string | null
-          created_at: string
-          updated_at: string
+          tipo: string
+          titulo: string | null
+          updated_at: string | null
         }
         Insert: {
+          ano: number
+          created_at?: string | null
           id?: number
           id_class_bp_dre?: number | null
           id_empresa: number
-          ano: number
           mes?: number
-          tipo?: string
-          titulo?: string | null
           numero_nota?: number | null
           texto_antes?: string | null
           texto_depois?: string | null
-          created_at?: string
-          updated_at?: string
+          tipo?: string
+          titulo?: string | null
+          updated_at?: string | null
         }
         Update: {
+          ano?: number
+          created_at?: string | null
           id?: number
           id_class_bp_dre?: number | null
           id_empresa?: number
-          ano?: number
           mes?: number
-          tipo?: string
-          titulo?: string | null
           numero_nota?: number | null
           texto_antes?: string | null
           texto_depois?: string | null
-          created_at?: string
-          updated_at?: string
+          tipo?: string
+          titulo?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -412,41 +460,62 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "nota_explicativa_bp_dre_id_class_bp_dre_fkey"
+            columns: ["id_class_bp_dre"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["bp_dre_id"]
+          },
+          {
             foreignKeyName: "nota_explicativa_bp_dre_id_empresa_fkey"
             columns: ["id_empresa"]
             isOneToOne: false
             referencedRelation: "empresa"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "nota_explicativa_bp_dre_id_empresa_fkey"
+            columns: ["id_empresa"]
+            isOneToOne: false
+            referencedRelation: "vw_empresas_balancetes_vigencia"
+            referencedColumns: ["empresa_id"]
+          },
+          {
+            foreignKeyName: "nota_explicativa_bp_dre_id_empresa_fkey"
+            columns: ["id_empresa"]
+            isOneToOne: false
+            referencedRelation: "vw_empresas_planocontas_vigencia"
+            referencedColumns: ["empresa_id"]
+          },
+          {
+            foreignKeyName: "nota_explicativa_bp_dre_id_empresa_fkey"
+            columns: ["id_empresa"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["empresa_id"]
+          },
         ]
       }
       nota_explicativa_bp_dre_itens: {
         Row: {
+          created_at: string | null
           id: number
-          id_nota_explicativa_bp_dre: number
           id_class_nota_explicativa: number
-          created_at: string
+          id_nota_explicativa_bp_dre: number
         }
         Insert: {
+          created_at?: string | null
           id?: number
-          id_nota_explicativa_bp_dre: number
           id_class_nota_explicativa: number
-          created_at?: string
+          id_nota_explicativa_bp_dre: number
         }
         Update: {
+          created_at?: string | null
           id?: number
-          id_nota_explicativa_bp_dre?: number
           id_class_nota_explicativa?: number
-          created_at?: string
+          id_nota_explicativa_bp_dre?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "nota_explicativa_bp_dre_itens_id_nota_explicativa_bp_dre_fkey"
-            columns: ["id_nota_explicativa_bp_dre"]
-            isOneToOne: false
-            referencedRelation: "nota_explicativa_bp_dre"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "nota_explicativa_bp_dre_itens_id_class_nota_explicativa_fkey"
             columns: ["id_class_nota_explicativa"]
@@ -454,45 +523,59 @@ export type Database = {
             referencedRelation: "class_nota_explicativa"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "nota_explicativa_bp_dre_itens_id_class_nota_explicativa_fkey"
+            columns: ["id_class_nota_explicativa"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["nota_explicativa_id"]
+          },
+          {
+            foreignKeyName: "nota_explicativa_bp_dre_itens_id_nota_explicativa_bp_dre_fkey"
+            columns: ["id_nota_explicativa_bp_dre"]
+            isOneToOne: false
+            referencedRelation: "nota_explicativa_bp_dre"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      nota_explicativa_bp_dre_variaveis: {
+      nota_explicativa_bp_dre_wrappers: {
         Row: {
           created_at: string | null
           id: number
           id_nota_explicativa_bp_dre: number
-          id_nota_variavel: number
+          id_nota_wrapper: number
         }
         Insert: {
           created_at?: string | null
           id?: number
           id_nota_explicativa_bp_dre: number
-          id_nota_variavel: number
+          id_nota_wrapper: number
         }
         Update: {
           created_at?: string | null
           id?: number
           id_nota_explicativa_bp_dre?: number
-          id_nota_variavel?: number
+          id_nota_wrapper?: number
         }
         Relationships: [
           {
-            foreignKeyName: "nota_explicativa_bp_dre_variaveis_id_nota_explicativa_fkey"
+            foreignKeyName: "nota_explicativa_bp_dre_variave_id_nota_explicativa_bp_dre_fkey"
             columns: ["id_nota_explicativa_bp_dre"]
             isOneToOne: false
             referencedRelation: "nota_explicativa_bp_dre"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "nota_explicativa_bp_dre_variaveis_id_nota_variavel_fkey"
-            columns: ["id_nota_variavel"]
+            foreignKeyName: "nota_explicativa_bp_dre_wrappers_id_nota_wrapper_fkey"
+            columns: ["id_nota_wrapper"]
             isOneToOne: false
-            referencedRelation: "nota_variavel"
+            referencedRelation: "nota_wrapper"
             referencedColumns: ["id"]
           },
         ]
       }
-      nota_variavel: {
+      nota_wrapper: {
         Row: {
           created_at: string | null
           descricao: string
@@ -510,23 +593,23 @@ export type Database = {
         }
         Relationships: []
       }
-      nota_variavel_operando: {
+      nota_wrapper_operando: {
         Row: {
           id: number
           id_class_nota_explicativa: number
-          id_nota_variavel: number
+          id_nota_wrapper: number
           sinal: number
         }
         Insert: {
           id?: number
           id_class_nota_explicativa: number
-          id_nota_variavel: number
+          id_nota_wrapper: number
           sinal: number
         }
         Update: {
           id?: number
           id_class_nota_explicativa?: number
-          id_nota_variavel?: number
+          id_nota_wrapper?: number
           sinal?: number
         }
         Relationships: [
@@ -538,10 +621,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "nota_variavel_operando_id_nota_variavel_fkey"
-            columns: ["id_nota_variavel"]
+            foreignKeyName: "nota_variavel_operando_id_class_nota_explicativa_fkey"
+            columns: ["id_class_nota_explicativa"]
             isOneToOne: false
-            referencedRelation: "nota_variavel"
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["nota_explicativa_id"]
+          },
+          {
+            foreignKeyName: "nota_wrapper_operando_id_nota_wrapper_fkey"
+            columns: ["id_nota_wrapper"]
+            isOneToOne: false
+            referencedRelation: "nota_wrapper"
             referencedColumns: ["id"]
           },
         ]
@@ -637,11 +727,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "plano_contas_itens_id_class_bp_dre_fkey"
+            columns: ["id_class_bp_dre"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["bp_dre_id"]
+          },
+          {
             foreignKeyName: "plano_contas_itens_id_class_ne_fkey"
             columns: ["id_class_nota_explicativa"]
             isOneToOne: false
             referencedRelation: "class_nota_explicativa"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plano_contas_itens_id_class_ne_fkey"
+            columns: ["id_class_nota_explicativa"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["nota_explicativa_id"]
           },
           {
             foreignKeyName: "plano_contas_itens_id_class_papel_trabalho_fkey"
@@ -651,6 +755,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "plano_contas_itens_id_class_papel_trabalho_fkey"
+            columns: ["id_class_papel_trabalho"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["papel_trabalho_id"]
+          },
+          {
             foreignKeyName: "plano_contas_itens_id_class_subgrupo_fkey"
             columns: ["id_class_subgrupo"]
             isOneToOne: false
@@ -658,11 +769,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "plano_contas_itens_id_class_subgrupo_fkey"
+            columns: ["id_class_subgrupo"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["subgrupo_id"]
+          },
+          {
             foreignKeyName: "plano_contas_itens_plano_contas_id_fkey"
             columns: ["id_plano_contas"]
             isOneToOne: false
             referencedRelation: "plano_contas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plano_contas_itens_plano_contas_id_fkey"
+            columns: ["id_plano_contas"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["plano_contas_id"]
           },
         ]
       }
@@ -711,11 +836,25 @@ export type Database = {
             referencedColumns: ["empresa_id"]
           },
           {
+            foreignKeyName: "plano_contas_vigencia_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["empresa_id"]
+          },
+          {
             foreignKeyName: "plano_contas_vigencia_plano_contas_id_fkey"
             columns: ["plano_contas_id"]
             isOneToOne: false
             referencedRelation: "plano_contas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plano_contas_vigencia_plano_contas_id_fkey"
+            columns: ["plano_contas_id"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["plano_contas_id"]
           },
         ]
       }
@@ -758,6 +897,13 @@ export type Database = {
             referencedColumns: ["empresa_id"]
           },
           {
+            foreignKeyName: "user_perfil_id_empresa_fkey"
+            columns: ["id_empresa"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["empresa_id"]
+          },
+          {
             foreignKeyName: "user_perfil_id_user_fkey"
             columns: ["id_user"]
             isOneToOne: false
@@ -789,6 +935,54 @@ export type Database = {
       }
     }
     Views: {
+      vw_balancete_periodo: {
+        Row: {
+          ano: number | null
+          ano_vigencia: number | null
+          balancete_id: number | null
+          conta: string | null
+          descricao: string | null
+          dt_importacao: string | null
+          empresa_id: number | null
+          mes: number | null
+          reduzido: number | null
+          saldo_anterior: number | null
+          saldo_atual: number | null
+          user_importacao: string | null
+          val_credito: number | null
+          val_debito: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plano_contas_vigencia_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresa"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plano_contas_vigencia_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "vw_empresas_balancetes_vigencia"
+            referencedColumns: ["empresa_id"]
+          },
+          {
+            foreignKeyName: "plano_contas_vigencia_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "vw_empresas_planocontas_vigencia"
+            referencedColumns: ["empresa_id"]
+          },
+          {
+            foreignKeyName: "plano_contas_vigencia_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["empresa_id"]
+          },
+        ]
+      }
       vw_empresas_balancetes_vigencia: {
         Row: {
           ano: number | null
@@ -811,6 +1005,13 @@ export type Database = {
             referencedRelation: "plano_contas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "plano_contas_vigencia_plano_contas_id_fkey"
+            columns: ["plano_contas_id"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["plano_contas_id"]
+          },
         ]
       }
       vw_empresas_planocontas_vigencia: {
@@ -832,7 +1033,49 @@ export type Database = {
             referencedRelation: "plano_contas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "plano_contas_vigencia_plano_contas_id_fkey"
+            columns: ["plano_contas_id"]
+            isOneToOne: false
+            referencedRelation: "vw_planocontas_vigencia"
+            referencedColumns: ["plano_contas_id"]
+          },
         ]
+      }
+      vw_planocontas_vigencia: {
+        Row: {
+          ano_vigencia: number | null
+          bp_dre_id: number | null
+          conta: string | null
+          conta_ativa: boolean | null
+          desc_bp_dre: string | null
+          desc_conta: string | null
+          desc_grupo: string | null
+          desc_subgrupo: string | null
+          empresa_abreviacao: string | null
+          empresa_ativa: boolean | null
+          empresa_cnpj: string | null
+          empresa_id: number | null
+          empresa_razao_social: string | null
+          fl_consolida_ebisa: boolean | null
+          fl_controlada: boolean | null
+          fl_controladora: boolean | null
+          grupo_id: number | null
+          item_id: number | null
+          nota_explicativa_desc: string | null
+          nota_explicativa_id: number | null
+          papel_trabalho_desc: string | null
+          papel_trabalho_id: number | null
+          papel_trabalho_sigla: string | null
+          plano_contas_descricao: string | null
+          plano_contas_id: number | null
+          plano_contas_nome: string | null
+          reduzido: number | null
+          sigla_subgrupo: string | null
+          subgrupo_id: number | null
+          vigencia_id: number | null
+        }
+        Relationships: []
       }
     }
     Functions: {

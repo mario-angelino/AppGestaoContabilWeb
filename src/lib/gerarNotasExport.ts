@@ -174,7 +174,7 @@ function renderResumoPdf(doc: jsPDF, quadros: NotaQuadro[], params: DFParams, x:
   const liquidoFinal = ativoFinal - passivoFinal
   const liquidoInicial = ativoInicial - passivoInicial
 
-  const body: CellDef[][] = hasDual
+  const body = hasDual
     ? [
         [{ content: 'ATIVO', styles: { fontStyle: 'bold' } }, { content: fmt(ativoInicial), styles: { fontStyle: 'bold', halign: 'right' } }, { content: fmt(ativoFinal), styles: { fontStyle: 'bold', halign: 'right' } }],
         [{ content: 'PASSIVO', styles: { fontStyle: 'bold' } }, { content: fmt(passivoInicial), styles: { fontStyle: 'bold', halign: 'right' } }, { content: fmt(passivoFinal), styles: { fontStyle: 'bold', halign: 'right' } }],
@@ -194,7 +194,7 @@ function renderResumoPdf(doc: jsPDF, quadros: NotaQuadro[], params: DFParams, x:
   autoTable(doc, {
     startY,
     head,
-    body,
+    body: body as unknown as CellDef[][],
     theme: 'plain',
     styles: { fontSize: 12, cellPadding: 1.5 },
     headStyles: { fontStyle: 'bold' },

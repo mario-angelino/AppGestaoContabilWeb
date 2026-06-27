@@ -44,7 +44,7 @@ export default function NotaVariavelDetalheModal({
           .eq('id_class_subgrupo', idClassSubgrupo)
           .range(from, from + PAGE - 1)
         if (error) throw error
-        all.push(...(data as typeof all))
+        all.push(...(data as unknown as typeof all))
         if (data.length < PAGE) break
       }
       return all
